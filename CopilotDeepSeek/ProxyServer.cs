@@ -87,6 +87,25 @@ public class ProxyServer : IDisposable
         IsRunning = false;
     }
 
+    // Flytta till något bättre
+    private static readonly Dictionary<string, string> _staticMimeTypes = new(StringComparer.OrdinalIgnoreCase)
+    {
+        { ".html", "text/html; charset=utf-8" },
+        { ".css",  "text/css" },
+        { ".js",   "application/javascript" },
+        { ".json", "application/json" },
+        { ".png",  "image/png" },
+        { ".jpg",  "image/jpeg" },
+        { ".jpeg", "image/jpeg" },
+        { ".gif",  "image/gif" },
+        { ".svg",  "image/svg+xml" },
+        { ".ico",  "image/x-icon" },
+        { ".woff", "font/woff" },
+        { ".woff2","font/woff2" },
+        { ".ttf",  "font/ttf" },
+        { ".map",  "application/json" },
+    };
+
     private async Task RunLoopAsync(CancellationToken token)
     {
         while (!token.IsCancellationRequested)
@@ -118,6 +137,18 @@ public class ProxyServer : IDisposable
                 case "/user/balance":
                 case "/models":
                     await HandleSimpleGetAsync(context, sw, context.Request.Url.AbsolutePath);
+                    return;
+                default:
+                    // Serve static files from www/ for GET requests with known extensions
+                    if (context.Request.HttpMethod == "GET")
+                    {
+                        var ext = Path.GetExtension(context.Request.Url!.AbsolutePath);
+                        if (_staticMimeTypes.ContainsKey(ext))
+                        {
+                            await HandleStaticFileAsync(context, sw);
+                            return;
+                        }
+                    }
                     return;
             }
 
@@ -454,6 +485,44 @@ public class ProxyServer : IDisposable
             var bytes = await File.ReadAllBytesAsync(path);
             context.Response.StatusCode = 200;
             context.Response.ContentType = "text/html; charset=utf-8";
+            context.Response.ContentLength64 = bytes.Length;
+            await context.Response.OutputStream.WriteAsync(bytes);
+            CompleteRequest(sw, context, 200, true);
+        }
+        catch (Exception ex)
+        {
+            context.Response.StatusCode = 500;
+            var error = Encoding.UTF8.GetBytes($"{{\"error\":\"{ex.Message}\"}}");
+            await context.Response.OutputStream.WriteAsync(error);
+            CompleteRequest(sw, context, 500, false);
+        }
+        finally
+        {
+            context.Response.Close();
+        }
+    }
+
+    private async Task HandleStaticFileAsync(HttpListenerContext context, Stopwatch sw)
+    {
+        try
+        {
+            // Sanitize path to prevent directory traversal
+            var relativePath = context.Request.Url!.AbsolutePath.TrimStart('/').Replace('/', Path.DirectorySeparatorChar);
+            var fullPath = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "www", relativePath));
+            var wwwRoot = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "www"));
+
+            // Ensure the resolved path stays within www/
+            if (!fullPath.StartsWith(wwwRoot, StringComparison.OrdinalIgnoreCase) || !File.Exists(fullPath))
+            {
+                context.Response.StatusCode = 404;
+                CompleteRequest(sw, context, 404, false);
+                return;
+            }
+
+            var ext = Path.GetExtension(fullPath);
+            var bytes = await File.ReadAllBytesAsync(fullPath);
+            context.Response.StatusCode = 200;
+            context.Response.ContentType = _staticMimeTypes[ext];
             context.Response.ContentLength64 = bytes.Length;
             await context.Response.OutputStream.WriteAsync(bytes);
             CompleteRequest(sw, context, 200, true);
