@@ -16,6 +16,8 @@ public class ProxyServer : IDisposable
     private readonly CancellationTokenSource _cts = new();
     private Task? _runTask;
 
+    private readonly HttpClient _httpClient;
+
     // Reasoning content cache for multi-turn conversations
     private readonly ConcurrentDictionary<string, string> _reasoningCache = new(StringComparer.Ordinal);
     private long _assistantMsgCounter = 0;
@@ -63,6 +65,12 @@ public class ProxyServer : IDisposable
             UseCookies = false,
             PreAuthenticate = false
         };
+
+        _httpClient = new HttpClient(_handler, disposeHandler: false);
+        _httpClient.DefaultRequestHeaders.Authorization =
+            new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", _apiKey);
+        _httpClient.DefaultRequestHeaders.Accept.Add(
+            new System.Net.Http.Headers.MediaTypeWithQualityHeaderValue("application/json"));
     }
 
     public void Start()
@@ -103,10 +111,8 @@ public class ProxyServer : IDisposable
             switch (context.Request.Url!.AbsolutePath)
             {
                 case "/user/balance":
-                    await HandleBalanceAsync(context, sw);
-                    return;
                 case "/models":
-                    await HandleModelsAsync(context, sw);
+                    await HandleSimpleGetAsync(context, sw, context.Request.Url.AbsolutePath);
                     return;
             }
 
@@ -427,28 +433,19 @@ public class ProxyServer : IDisposable
         (_listener as IDisposable)?.Dispose();
     }
 
-    private async Task HandleBalanceAsync(HttpListenerContext context, Stopwatch sw)
+    private async Task HandleSimpleGetAsync(HttpListenerContext context, Stopwatch sw, string path)
     {
         try
         {
-            using var client = new HttpClient(_handler, disposeHandler: false);
-            using var request = new HttpRequestMessage(HttpMethod.Get,
-                $"{_targetBase}/user/balance");
+            using var response = await _httpClient.GetAsync($"{_targetBase}{path}");
 
-            // Only send the essential headers DeepSeek expects
-            request.Headers.Authorization =
-                new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", _apiKey);
-            request.Headers.Accept.Add(
-                new System.Net.Http.Headers.MediaTypeWithQualityHeaderValue("application/json"));
-
-            using var response = await client.SendAsync(request);
+            var bytes = await response.Content.ReadAsByteArrayAsync();
 
             context.Response.StatusCode = (int)response.StatusCode;
-            context.Response.StatusDescription = response.ReasonPhrase;
+            context.Response.StatusDescription = response.ReasonPhrase ?? string.Empty;
             context.Response.ContentType = "application/json";
+            context.Response.ContentLength64 = bytes.Length;
 
-            var body = await response.Content.ReadAsStringAsync();
-            var bytes = Encoding.UTF8.GetBytes(body);
             await context.Response.OutputStream.WriteAsync(bytes);
             CompleteRequest(sw, context, (int)response.StatusCode, response.IsSuccessStatusCode);
         }
@@ -457,44 +454,7 @@ public class ProxyServer : IDisposable
             context.Response.StatusCode = 502;
             var error = Encoding.UTF8.GetBytes($"{{\"error\":\"{ex.Message}\"}}");
             await context.Response.OutputStream.WriteAsync(error);
-            CompleteRequest(sw, context, context.Response.StatusCode, false);
-        }
-        finally
-        {
-            context.Response.Close();
-        }
-    }
-
-    private async Task HandleModelsAsync(HttpListenerContext context, Stopwatch sw)
-    {
-        try
-        {
-            using var client = new HttpClient(_handler, disposeHandler: false);
-            using var request = new HttpRequestMessage(HttpMethod.Get,
-                $"{_targetBase}/models");
-
-            request.Headers.Authorization =
-                new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", _apiKey);
-            request.Headers.Accept.Add(
-                new System.Net.Http.Headers.MediaTypeWithQualityHeaderValue("application/json"));
-
-            using var response = await client.SendAsync(request);
-
-            context.Response.StatusCode = (int)response.StatusCode;
-            context.Response.StatusDescription = response.ReasonPhrase;
-            context.Response.ContentType = "application/json";
-
-            var body = await response.Content.ReadAsStringAsync();
-            var bytes = Encoding.UTF8.GetBytes(body);
-            await context.Response.OutputStream.WriteAsync(bytes);
-            CompleteRequest(sw, context, (int)response.StatusCode, response.IsSuccessStatusCode);
-        }
-        catch (Exception ex)
-        {
-            context.Response.StatusCode = 502;
-            var error = Encoding.UTF8.GetBytes($"{{\"error\":\"{ex.Message}\"}}");
-            await context.Response.OutputStream.WriteAsync(error);
-            CompleteRequest(sw, context, context.Response.StatusCode, false);
+            CompleteRequest(sw, context, 502, false);
         }
         finally
         {
