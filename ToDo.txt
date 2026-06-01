@@ -1,0 +1,1 @@
+CORS när vi kör som debug så vi slipper att vue gnäller D:

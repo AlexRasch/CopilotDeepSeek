@@ -23,6 +23,9 @@ public class ProxyServer : IDisposable
     private long _assistantMsgCounter = 0;
 
     public bool IsRunning { get; private set; }
+
+    public bool AllowDeepSeek { get; private set; } = true;
+
     public int Port { get; }
 
     /// <summary>
@@ -73,6 +76,9 @@ public class ProxyServer : IDisposable
             new System.Net.Http.Headers.MediaTypeWithQualityHeaderValue("application/json"));
     }
 
+    /// <summary>
+    /// Used by CLI to Start the entire proxy server
+    /// </summary>
     public void Start()
     {
         _listener.Start();
@@ -80,11 +86,31 @@ public class ProxyServer : IDisposable
         _runTask = Task.Run(() => RunLoopAsync(_cts.Token));
     }
 
+    /// <summary>
+    /// Used by CLI to Stop the entire proxy server.
+    /// </summary>
     public void Stop()
     {
         _cts.Cancel();
         try { _listener.Stop(); } catch { /* already stopped */ }
         IsRunning = false;
+    }
+
+
+    /// <summary>
+    /// Used by webinterface to allow deep seek requests to be proxied through
+    /// </summary>
+    public void AllowDeepSeekRequests()
+    {
+        this.AllowDeepSeek = true;
+    }
+
+    /// <summary>
+    /// Used by webinterface to deny deep seek requests from being proxied through
+    /// </summary>
+    public void DenyDeepSeekRequests()
+    {
+        this.AllowDeepSeek = false;
     }
 
     // Flytta till något bättre
@@ -129,14 +155,24 @@ public class ProxyServer : IDisposable
             // Route specialized endpoints directly
             switch (context.Request.Url!.AbsolutePath)
             {
-                // Portal
-                case "/":
-                    await HandleIndexAsync(context, sw);
-                    return;
                 // Extra DeepSeek API endpoints
                 case "/user/balance":
                 case "/models":
                     await HandleSimpleGetAsync(context, sw, context.Request.Url.AbsolutePath);
+                    return;
+                // Portal
+                case "/":
+                    await HandleIndexAsync(context, sw);
+                    return;
+                case "/start":
+                    this.AllowDeepSeekRequests();
+                    await RespondJsonAsync(context, 200, ApiResponse.DeepSeekEnabled());
+                    CompleteRequest(sw, context, 200, true);
+                    return;
+                case "/stop":
+                    this.DenyDeepSeekRequests();
+                    await RespondJsonAsync(context, 200, ApiResponse.DeepSeekDisabled());
+                    CompleteRequest(sw, context, 200, true);
                     return;
                 default:
                     // Serve static files from www/ for GET requests with known extensions
@@ -149,8 +185,19 @@ public class ProxyServer : IDisposable
                             return;
                         }
                     }
-                    return;
+                    break;
             }
+
+            // If user have decided to deny deep seek requests, block any non-static requests to the proxy
+            if (!AllowDeepSeek)
+            {
+                //context.Response.StatusCode = 403;
+                await RespondJsonAsync(context, 403, ApiResponse.ErrorResponse("Proxy requests to DeepSeek are disabled"));
+                CompleteRequest(sw, context, 403, false);
+                //context.Response.Close();
+                return;
+            }
+
 
             // General proxy logic for all other endpoints
             var targetUrl = $"{_targetBase}{context.Request.Url!.AbsolutePath}{context.Request.Url.Query}";
@@ -567,6 +614,16 @@ public class ProxyServer : IDisposable
         {
             context.Response.Close();
         }
+    }
+
+    private static async Task RespondJsonAsync(HttpListenerContext context, int statusCode, ApiResponse response)
+    {
+        var json = JsonSerializer.Serialize(response, AppJsonContext.Default.ApiResponse);
+        var bytes = Encoding.UTF8.GetBytes(json);
+        context.Response.StatusCode = statusCode;
+        context.Response.ContentType = "application/json; charset=utf-8";
+        context.Response.ContentLength64 = bytes.Length;
+        await context.Response.OutputStream.WriteAsync(bytes);
     }
 
     private async Task FetchAndLogBalanceAsync(HttpClient client)
