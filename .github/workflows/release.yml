@@ -1,0 +1,64 @@
+name: Build & Release
+
+on:
+  push:
+    branches:
+      - master
+
+jobs:
+  release:
+    name: Build and publish release
+    runs-on: windows-latest  # AOT på Windows kräver windows runner
+
+    permissions:
+      contents: write  # Krävs för att skapa releases
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Setup Node.js (för Vue-portalen)
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: portal/package-lock.json
+
+      - name: Install portal dependencies
+        run: npm ci
+        working-directory: portal
+
+      - name: Publish (AOT, self-contained)
+        run: |
+          dotnet publish CopilotDeepSeek/CopilotDeepSeek.csproj `
+            --configuration Release `
+            --runtime win-x64 `
+            --self-contained true `
+            --output ./publish
+        shell: pwsh
+
+      - name: Skapa zip av release
+        run: Compress-Archive -Path ./publish/* -DestinationPath CopilotDeepSeek-win-x64.zip
+        shell: pwsh
+
+      - name: Generera versionsnummer (datum + run number)
+        id: version
+        run: echo "tag=v$(Get-Date -Format 'yyyy.MM.dd').${{ github.run_number }}" >> $env:GITHUB_OUTPUT
+        shell: pwsh
+
+      - name: Skapa GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: Release ${{ steps.version.outputs.tag }}
+          body: |
+            Automatisk release från merge till master.
+            Commit: ${{ github.sha }}
+          files: CopilotDeepSeek-win-x64.zip
+          draft: false
+          prerelease: false
