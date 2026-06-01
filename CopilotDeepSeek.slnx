@@ -4,4 +4,8 @@
   </Folder>
   <Project Path="CopilotDeepSeek/CopilotDeepSeek.csproj" />
   <Project Path="CopilotDeepSeekTests/CopilotDeepSeekTests.csproj" />
+  <Project Path="Portal/portal.esproj">
+    <Build />
+    <Deploy />
+  </Project>
 </Solution>

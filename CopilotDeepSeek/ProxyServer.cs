@@ -110,6 +110,11 @@ public class ProxyServer : IDisposable
             // Route specialized endpoints directly
             switch (context.Request.Url!.AbsolutePath)
             {
+                // Portal
+                case "/":
+                    await HandleIndexAsync(context, sw);
+                    return;
+                // Extra DeepSeek API endpoints
                 case "/user/balance":
                 case "/models":
                     await HandleSimpleGetAsync(context, sw, context.Request.Url.AbsolutePath);
@@ -431,6 +436,39 @@ public class ProxyServer : IDisposable
         _cts.Dispose();
         _handler.Dispose();
         (_listener as IDisposable)?.Dispose();
+    }
+
+    private async Task HandleIndexAsync(HttpListenerContext context, Stopwatch sw)
+    {
+        try
+        {
+            var path = Path.Combine(AppContext.BaseDirectory, "www", "index.html");
+
+            if (!File.Exists(path))
+            {
+                context.Response.StatusCode = 404;
+                CompleteRequest(sw, context, 404, false);
+                return;
+            }
+
+            var bytes = await File.ReadAllBytesAsync(path);
+            context.Response.StatusCode = 200;
+            context.Response.ContentType = "text/html; charset=utf-8";
+            context.Response.ContentLength64 = bytes.Length;
+            await context.Response.OutputStream.WriteAsync(bytes);
+            CompleteRequest(sw, context, 200, true);
+        }
+        catch (Exception ex)
+        {
+            context.Response.StatusCode = 500;
+            var error = Encoding.UTF8.GetBytes($"{{\"error\":\"{ex.Message}\"}}");
+            await context.Response.OutputStream.WriteAsync(error);
+            CompleteRequest(sw, context, 500, false);
+        }
+        finally
+        {
+            context.Response.Close();
+        }
     }
 
     private async Task HandleSimpleGetAsync(HttpListenerContext context, Stopwatch sw, string path)
