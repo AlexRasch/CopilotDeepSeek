@@ -14,16 +14,21 @@ class Program
     Justification = "Interface used intentionally to support testability.")]
     private static readonly ISettingsService _settingsService = new SettingsService();
 
+    // Tracks the current verbosity level for request logging.
+    private static VerbosityLevel _verbosity = VerbosityLevel.None;
+
     static void Main(string[] args)
     {
-        ParseArgs(args, out bool hidden, out bool reset);
+        ParseArgs(args, out bool hidden, out bool reset, out VerbosityLevel parsedVerbosity);
+        _verbosity = parsedVerbosity;
+
 
         if (reset)
             _settingsService.Reset();
 
         var settings = _settingsService.LoadOrCreate();
         EnsureApiKey(settings);
-        StartProxyIfAutoRun(settings);
+        StartProxyIfAutoRun(settings, hidden);
 
         if (!hidden)
         {
@@ -44,10 +49,33 @@ class Program
     // Arg parsing
     // -------------------------------------------------------------------------
 
-    private static void ParseArgs(string[] args, out bool hidden, out bool reset)
+    private static void ParseArgs(string[] args, out bool hidden, out bool reset, out VerbosityLevel verbosity)
     {
         hidden = args.Contains("--hidden", StringComparer.OrdinalIgnoreCase);
         reset = args.Contains("--reset", StringComparer.OrdinalIgnoreCase);
+
+        verbosity = VerbosityLevel.None;
+
+        for (int i = 0; i < args.Length; i++)
+        {
+            // Support both "--verbosity 1" and "--verbosity=1"
+            ReadOnlySpan<char> arg = args[i];
+
+            if (arg.StartsWith("--verbosity=", StringComparison.OrdinalIgnoreCase))
+            {
+                var valueSpan = arg["--verbosity=".Length..];
+                if (int.TryParse(valueSpan, out int v) && Enum.IsDefined(typeof(VerbosityLevel), v))
+                    verbosity = (VerbosityLevel)v;
+            }
+            else if (arg.Equals("--verbosity", StringComparison.OrdinalIgnoreCase) && i + 1 < args.Length)
+            {
+                if (int.TryParse(args[i + 1], out int v) && Enum.IsDefined(typeof(VerbosityLevel), v))
+                    verbosity = (VerbosityLevel)v;
+            }
+        }
+        // If not defined fallback to 2
+        verbosity = verbosity == VerbosityLevel.None ? VerbosityLevel.All : verbosity;
+
     }
 
     // -------------------------------------------------------------------------
@@ -72,12 +100,16 @@ class Program
     // Proxy management
     // -------------------------------------------------------------------------
 
-    private static void StartProxyIfAutoRun(Settings settings)
+    private static void StartProxyIfAutoRun(Settings settings, bool hidden)
     {
         if (!settings.AutoRun)
             return;
 
         _proxy = new ProxyServer(settings);
+
+        if (!hidden && _verbosity != VerbosityLevel.None)
+            _proxy.RequestCompleted += OnRequestCompleted;
+
         _proxy.Start();
     }
 
@@ -94,6 +126,38 @@ class Program
             _proxy.Start();
             Console.WriteLine("Proxy started.");
         }
+    }
+
+    // -------------------------------------------------------------------------
+    // Request callback
+    // -------------------------------------------------------------------------
+
+    private static void OnRequestCompleted(ProxyRequestEvent evt)
+    {
+        if (_verbosity == VerbosityLevel.FailuresOnly && evt.IsSuccess)
+            return;
+
+        var timestamp = DateTime.Now.ToString("HH:mm:ss");
+        var status = evt.IsSuccess ? "OK " : "ERR";
+        var ms = evt.Elapsed.TotalMilliseconds;
+
+        if (evt.IsSuccess)
+        {
+            Console.ForegroundColor = ConsoleColor.Green;
+            Console.WriteLine($"[{timestamp}] {status} {evt.StatusCode}  {evt.Method,-6} {evt.Path}  ({ms:F0} ms)");
+        }
+        else
+        {
+            Console.ForegroundColor = ConsoleColor.Red;
+            Console.Write($"[{timestamp}] {status} {evt.StatusCode}  {evt.Method,-6} {evt.Path}  ({ms:F0} ms)");
+
+            if (!string.IsNullOrEmpty(evt.ErrorMessage))
+                Console.Write($"  — {evt.ErrorMessage}");
+
+            Console.WriteLine();
+        }
+
+        Console.ResetColor();
     }
 
     // -------------------------------------------------------------------------

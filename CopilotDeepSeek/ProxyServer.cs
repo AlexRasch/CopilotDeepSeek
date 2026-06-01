@@ -1,4 +1,6 @@
-﻿using System.Collections.Concurrent;
+﻿using CopilotDeepSeek.Models;
+using System.Collections.Concurrent;
+using System.Diagnostics;
 using System.Net;
 using System.Text;
 using System.Text.Json;
@@ -20,6 +22,26 @@ public class ProxyServer : IDisposable
 
     public bool IsRunning { get; private set; }
     public int Port { get; }
+
+    /// <summary>
+    /// Raised on the thread-pool thread that handled the request,
+    /// after the response has been fully sent to the client.
+    /// Subscribers must be thread-safe.
+    /// </summary>
+    public event Action<ProxyRequestEvent>? RequestCompleted;
+
+    private void RaiseRequestCompleted(ProxyRequestEvent evt) => RequestCompleted?.Invoke(evt);
+
+    private void CompleteRequest(Stopwatch sw, HttpListenerContext context, int statusCode, bool isSuccess)
+    {
+        sw.Stop();
+        RaiseRequestCompleted(new ProxyRequestEvent(
+            context.Request.HttpMethod,
+            context.Request.Url?.AbsolutePath ?? "/",
+            statusCode,
+            sw.Elapsed,
+            isSuccess));
+    }
 
     public ProxyServer(Models.Settings settings)
     {
@@ -74,105 +96,108 @@ public class ProxyServer : IDisposable
 
     private async Task HandleRequestAsync(HttpListenerContext context)
     {
+        var sw = Stopwatch.StartNew();
         try
         {
+            // Route specialized endpoints directly
+            switch (context.Request.Url!.AbsolutePath)
             {
-                // Route specialized endpoints directly
-                switch (context.Request.Url!.AbsolutePath)
+                case "/user/balance":
+                    await HandleBalanceAsync(context, sw);
+                    return;
+                case "/models":
+                    await HandleModelsAsync(context, sw);
+                    return;
+            }
+
+            // General proxy logic for all other endpoints
+            var targetUrl = $"{_targetBase}{context.Request.Url!.AbsolutePath}{context.Request.Url.Query}";
+
+            using var client = new HttpClient(_handler, disposeHandler: false);
+            using var forwardRequest = new HttpRequestMessage(
+                new HttpMethod(context.Request.HttpMethod), targetUrl);
+
+            // Copy headers (skip Host to avoid conflicts)
+            foreach (string? key in context.Request.Headers.AllKeys)
+            {
+                if (key != null && !string.Equals(key, "Host", StringComparison.OrdinalIgnoreCase))
                 {
-                    case "/user/balance":
-                        await HandleBalanceAsync(context);
-                        return;
-                    case "/models":
-                        await HandleModelsAsync(context);
-                        return;
+                    forwardRequest.Headers.TryAddWithoutValidation(key, context.Request.Headers[key]);
                 }
+            }
 
-                // General proxy logic for all other endpoints
-                var targetUrl = $"{_targetBase}{context.Request.Url!.AbsolutePath}{context.Request.Url.Query}";
+            // Set authentication
+            forwardRequest.Headers.Authorization =
+                new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", _apiKey);
 
-                using var client = new HttpClient(_handler, disposeHandler: false);
-                using var forwardRequest = new HttpRequestMessage(
-                    new HttpMethod(context.Request.HttpMethod), targetUrl);
+            // Copy and potentially modify request body
+            string? requestBody = null;
+            bool isStreaming = false;
 
-                // Copy headers (skip Host to avoid conflicts)
-                foreach (string? key in context.Request.Headers.AllKeys)
+            if (context.Request.HasEntityBody)
+            {
+                using var reader = new StreamReader(context.Request.InputStream, Encoding.UTF8);
+                var body = await reader.ReadToEndAsync();
+
+                // Check if this is a chat completions request and inject cached reasoning
+                if (targetUrl.Contains("/chat/completions"))
                 {
-                    if (key != null && !string.Equals(key, "Host", StringComparison.OrdinalIgnoreCase))
-                    {
-                        forwardRequest.Headers.TryAddWithoutValidation(key, context.Request.Headers[key]);
-                    }
-                }
-
-                // Set authentication
-                forwardRequest.Headers.Authorization =
-                    new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", _apiKey);
-
-                // Copy and potentially modify request body
-                string? requestBody = null;
-                bool isStreaming = false;
-
-                if (context.Request.HasEntityBody)
-                {
-                    using var reader = new StreamReader(context.Request.InputStream, Encoding.UTF8);
-                    var body = await reader.ReadToEndAsync();
-
-                    // Check if this is a chat completions request and inject cached reasoning
-                    if (targetUrl.Contains("/chat/completions"))
-                    {
-                        requestBody = ModifyRequestBody(body, out isStreaming);
-                    }
-                    else
-                    {
-                        requestBody = body;
-                    }
-
-                    forwardRequest.Content = new StringContent(requestBody, Encoding.UTF8,
-                        context.Request.ContentType ?? "application/json");
-                }
-
-                // Forward to DeepSeek
-                var completionOption = isStreaming
-                    ? HttpCompletionOption.ResponseHeadersRead
-                    : HttpCompletionOption.ResponseContentRead;
-
-                using var forwardResponse = await client.SendAsync(forwardRequest, completionOption);
-
-                // Copy response status and headers
-                context.Response.StatusCode = (int)forwardResponse.StatusCode;
-                context.Response.StatusDescription = forwardResponse.ReasonPhrase;
-
-                foreach (var header in forwardResponse.Headers)
-                    context.Response.Headers[header.Key] = string.Join(", ", header.Value);
-
-                foreach (var header in forwardResponse.Content.Headers)
-                    context.Response.Headers[header.Key] = string.Join(", ", header.Value);
-
-                // Handle streaming vs non-streaming responses
-                if (isStreaming && forwardResponse.IsSuccessStatusCode)
-                {
-                    await StreamAndCacheResponse(forwardResponse, context.Response);
+                    requestBody = ModifyRequestBody(body, out isStreaming);
                 }
                 else
                 {
-                    var responseBody = await forwardResponse.Content.ReadAsStringAsync();
-
-                    // Cache reasoning content from non-streaming responses
-                    if (forwardResponse.IsSuccessStatusCode && targetUrl.Contains("/chat/completions"))
-                    {
-                        CacheReasoningFromResponse(responseBody);
-                    }
-
-                    var responseBytes = Encoding.UTF8.GetBytes(responseBody);
-                    await context.Response.OutputStream.WriteAsync(responseBytes);
+                    requestBody = body;
                 }
+
+                forwardRequest.Content = new StringContent(requestBody, Encoding.UTF8,
+                    context.Request.ContentType ?? "application/json");
             }
+
+            // Forward to DeepSeek
+            var completionOption = isStreaming
+                ? HttpCompletionOption.ResponseHeadersRead
+                : HttpCompletionOption.ResponseContentRead;
+
+            using var forwardResponse = await client.SendAsync(forwardRequest, completionOption);
+
+            // Copy response status and headers
+            context.Response.StatusCode = (int)forwardResponse.StatusCode;
+            context.Response.StatusDescription = forwardResponse.ReasonPhrase;
+
+            foreach (var header in forwardResponse.Headers)
+                context.Response.Headers[header.Key] = string.Join(", ", header.Value);
+
+            foreach (var header in forwardResponse.Content.Headers)
+                context.Response.Headers[header.Key] = string.Join(", ", header.Value);
+
+            // Handle streaming vs non-streaming responses
+            if (isStreaming && forwardResponse.IsSuccessStatusCode)
+            {
+                await StreamAndCacheResponse(forwardResponse, context.Response);
+            }
+            else
+            {
+                var responseBody = await forwardResponse.Content.ReadAsStringAsync();
+
+                // Cache reasoning content from non-streaming responses
+                if (forwardResponse.IsSuccessStatusCode && targetUrl.Contains("/chat/completions"))
+                {
+                    CacheReasoningFromResponse(responseBody);
+                }
+
+                var responseBytes = Encoding.UTF8.GetBytes(responseBody);
+                await context.Response.OutputStream.WriteAsync(responseBytes);
+            }
+
+            CompleteRequest(sw, context, (int)forwardResponse.StatusCode, forwardResponse.IsSuccessStatusCode);
+
         }
         catch (Exception ex)
         {
             context.Response.StatusCode = 502;
             var error = Encoding.UTF8.GetBytes($"{{\"error\":\"{ex.Message}\"}}");
             await context.Response.OutputStream.WriteAsync(error);
+            CompleteRequest(sw, context, context.Response.StatusCode, false);
         }
         finally
         {
@@ -402,7 +427,7 @@ public class ProxyServer : IDisposable
         (_listener as IDisposable)?.Dispose();
     }
 
-    private async Task HandleBalanceAsync(HttpListenerContext context)
+    private async Task HandleBalanceAsync(HttpListenerContext context, Stopwatch sw)
     {
         try
         {
@@ -425,13 +450,14 @@ public class ProxyServer : IDisposable
             var body = await response.Content.ReadAsStringAsync();
             var bytes = Encoding.UTF8.GetBytes(body);
             await context.Response.OutputStream.WriteAsync(bytes);
+            CompleteRequest(sw, context, (int)response.StatusCode, response.IsSuccessStatusCode);
         }
         catch (Exception ex)
         {
             context.Response.StatusCode = 502;
             var error = Encoding.UTF8.GetBytes($"{{\"error\":\"{ex.Message}\"}}");
             await context.Response.OutputStream.WriteAsync(error);
-            Console.WriteLine($"[Balance] ERROR: {ex.Message}");
+            CompleteRequest(sw, context, context.Response.StatusCode, false);
         }
         finally
         {
@@ -439,7 +465,7 @@ public class ProxyServer : IDisposable
         }
     }
 
-    private async Task HandleModelsAsync(HttpListenerContext context)
+    private async Task HandleModelsAsync(HttpListenerContext context, Stopwatch sw)
     {
         try
         {
@@ -461,13 +487,14 @@ public class ProxyServer : IDisposable
             var body = await response.Content.ReadAsStringAsync();
             var bytes = Encoding.UTF8.GetBytes(body);
             await context.Response.OutputStream.WriteAsync(bytes);
+            CompleteRequest(sw, context, (int)response.StatusCode, response.IsSuccessStatusCode);
         }
         catch (Exception ex)
         {
             context.Response.StatusCode = 502;
             var error = Encoding.UTF8.GetBytes($"{{\"error\":\"{ex.Message}\"}}");
             await context.Response.OutputStream.WriteAsync(error);
-            Console.WriteLine($"[Models] ERROR: {ex.Message}");
+            CompleteRequest(sw, context, context.Response.StatusCode, false);
         }
         finally
         {
