@@ -1,0 +1,7 @@
+<Solution>
+  <Folder Name="/Solution Items/">
+    <File Path="ToDo.txt" />
+  </Folder>
+  <Project Path="CopilotDeepSeek/CopilotDeepSeek.csproj" />
+  <Project Path="CopilotDeepSeekTests/CopilotDeepSeekTests.csproj" />
+</Solution>
