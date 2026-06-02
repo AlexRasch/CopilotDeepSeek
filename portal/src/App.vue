@@ -1,8 +1,28 @@
 <script setup lang="ts">
-  import { ref } from 'vue'
+  import { computed, onMounted, ref } from 'vue'
+  import type { BalanceResponse } from './model/BalanceResponse'
 
   const isRunning = ref(true)
-  const localUrl = "http://localhost:5000/"; // improve this later 
+  const localUrl = "http://localhost:5000/"; // improve this later
+  const userBalance = ref<BalanceResponse | null>(null);
+  let balanceInterval: ReturnType<typeof setInterval> | null = null;
+
+
+  const balanceDisplay = computed(() => {
+    if (!userBalance.value || userBalance.value.balance_infos.length === 0)
+        return 'Loading...';
+    
+    const info = userBalance.value.balance_infos[0];
+    return `${info?.total_balance ?? 0.0} ${info?.currency ?? ''}`;
+  });
+
+  onMounted(() => {
+    if (balanceInterval === null) {
+      fetchUserBalance();
+      balanceInterval = setInterval(fetchUserBalance, 60000);
+    }
+
+  });
 
   async function toggleProxy() {
     isRunning.value = !isRunning.value
@@ -11,7 +31,16 @@
     } else {
       const response = await fetch(localUrl + 'stop');
     }
+  }
 
+  async function fetchUserBalance() {
+    try {
+      const response = await fetch(localUrl + 'user/balance');
+      const data: BalanceResponse = await response.json();
+      userBalance.value = data;
+    } catch (error) {
+      console.error('Failed to fetch balance:', error);
+    }
   }
 </script>
 
@@ -33,19 +62,19 @@
           <div class="hidden items-center gap-6 md:flex">
             <button class="rounded-md px-3 py-2 text-sm font-medium transition-colors hover:bg-gray-700 hover:text-white">
               Balance
-            </button>
-            <button class="rounded-md px-3 py-2 text-sm font-medium transition-colors hover:bg-gray-700 hover:text-white">
-              Status
+              <span>{{ balanceDisplay }}</span>
             </button>
             <button class="rounded-md px-3 py-2 text-sm font-medium transition-colors hover:bg-gray-700 hover:text-white">
               Logs
+            </button>
+            <button class="rounded-md px-3 py-2 text-sm font-medium transition-colors hover:bg-gray-700 hover:text-white">
+              Settings
             </button>
           </div>
 
           <!-- Start / Stop Toggle -->
           <div class="flex items-center gap-3">
-            <span class="hidden text-sm sm:inline"
-                  :class="isRunning ? 'text-green-400' : 'text-gray-400'">
+            <span class="hidden text-sm sm:inline" :class="isRunning ? 'text-green-400' : 'text-gray-400'">
               {{ isRunning ? 'Running' : 'Stopped' }}
             </span>
             <button @click="toggleProxy"
