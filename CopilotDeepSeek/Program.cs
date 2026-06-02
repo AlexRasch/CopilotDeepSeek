@@ -110,7 +110,10 @@ class Program
         if (!hidden && _verbosity != VerbosityLevel.None)
             _proxy.RequestCompleted += OnRequestCompleted;
 
-        _proxy.Start();
+        if (!_proxy.Start() && !hidden)
+        {
+            Console.WriteLine($"Warning: Could not start proxy on port {settings.Port} — port is already in use.");
+        }
     }
 
     private static void ToggleProxy(Settings settings)
@@ -123,8 +126,14 @@ class Program
         else
         {
             _proxy = new ProxyServer(settings);
-            _proxy.Start();
-            Console.WriteLine("Proxy started.");
+            if (_proxy.Start())
+            {
+                Console.WriteLine("Proxy started on port " + settings.Port + ".");
+            }
+            else
+            {
+                Console.WriteLine($"Failed to start proxy — port {settings.Port} is already in use.");
+            }
         }
     }
 
@@ -170,12 +179,22 @@ class Program
         {
             switch (Console.ReadKey(true))
             {
+                case var k when k.Key == ConsoleKey.C:
+                    Console.Clear();
+                    Helper.PrintBanner();
+                    break;
+
                 case var k when k.Key == ConsoleKey.E:
                     Shutdown();
                     break;
 
+                case var k when k.Key == ConsoleKey.H:
+                    Console.Clear();
+                    Helper.PrintHelp();
+                    break;
+
                 case var k when k.Key == ConsoleKey.S:
-                    PrintSettings(settings);
+                    Helper.PrintSettings(settings, _proxy?.IsRunning == true);
                     break;
 
                 case var k when k.Key == ConsoleKey.P:
@@ -194,29 +213,5 @@ class Program
         _proxy?.Stop();
         Thread.Sleep(500);
         _appShouldRun = false;
-    }
-
-    // -------------------------------------------------------------------------
-    // Settings display
-    // -------------------------------------------------------------------------
-
-    internal static void PrintSettings(Settings settings)
-    {
-        Console.Clear();
-        Console.WriteLine("=== Current Settings ===\n");
-        Console.WriteLine($"  Base URL : {settings.BaseUrl}");
-        Console.WriteLine($"  Model    : {settings.Model}");
-        Console.WriteLine($"  Port     : {settings.Port}");
-        Console.WriteLine($"  Auto Run : {settings.AutoRun}");
-        Console.WriteLine($"  Proxy    : {(_proxy?.IsRunning == true ? "Running" : "Stopped")}");
-
-        string apiKey = string.IsNullOrEmpty(settings.ApiKey)
-            ? "(not set)"
-            : SecurityHelper.Decrypt(settings.ApiKey);
-        Console.WriteLine($"  API Key  : {apiKey}");
-
-        Console.WriteLine($"\nConfig file: {Path.GetFullPath("settings.json")}");
-        Console.WriteLine("\nPress any key to return...");
-        Console.ReadKey(true);
     }
 }

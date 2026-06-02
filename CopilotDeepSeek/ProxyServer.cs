@@ -77,13 +77,30 @@ public class ProxyServer : IDisposable
     }
 
     /// <summary>
-    /// Used by CLI to Start the entire proxy server
+    /// Used by CLI to Start the entire proxy server.
+    /// Returns true if the listener was started successfully, false if the port is already in use.
     /// </summary>
-    public void Start()
+    public bool Start()
     {
-        _listener.Start();
-        IsRunning = true;
-        _runTask = Task.Run(() => RunLoopAsync(_cts.Token));
+        try
+        {
+            _listener.Start();
+            IsRunning = true;
+            _runTask = Task.Run(() => RunLoopAsync(_cts.Token));
+            return true;
+        }
+        catch (HttpListenerException ex) when (ex.ErrorCode == 183) // ERROR_ALREADY_EXISTS
+        {
+            IsRunning = false;
+            Console.Error.WriteLine($"Port {Port} is already in use by another process.");
+            return false;
+        }
+        catch (HttpListenerException ex)
+        {
+            IsRunning = false;
+            Console.Error.WriteLine($"Failed to start HTTP listener on port {Port}: {ex.Message}");
+            return false;
+        }
     }
 
     /// <summary>

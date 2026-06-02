@@ -1,4 +1,5 @@
-﻿using System.Reflection;
+﻿using CopilotDeepSeek.Models;
+using System.Reflection;
 
 namespace CopilotDeepSeek;
 
@@ -19,12 +20,34 @@ public static class Helper
         Console.WriteLine("==============================");
     }
 
-    public static void PrintHelp()
+    internal static void PrintSettings(Settings settings, bool proxyRunning)
     {
-        Console.WriteLine("Commands:");
-        Console.WriteLine("  E  - Exit");
-        Console.WriteLine("  S  - Show settings");
-        Console.WriteLine("  P  - Toggle proxy");
+        Console.Clear();
+        Console.WriteLine("=== Current Settings ===\n");
+        Console.WriteLine($"  Base URL : {settings.BaseUrl}");
+        Console.WriteLine($"  Model    : {settings.Model}");
+        Console.WriteLine($"  Port     : {settings.Port}");
+        Console.WriteLine($"  Auto Run : {settings.AutoRun}");
+        Console.WriteLine($"  Proxy    : {(proxyRunning ? "Running" : "Stopped")}");
+
+        string apiKey = string.IsNullOrEmpty(settings.ApiKey)
+            ? "(not set)"
+            : SecurityHelper.Decrypt(settings.ApiKey);
+        Console.WriteLine($"  API Key  : {apiKey}");
+
+        Console.WriteLine($"\nConfig file: {Path.GetFullPath("settings.json")}");
+        Console.WriteLine("\nPress any key to return...");
+        Console.ReadKey(true);
+        Console.Clear();
+    }
+
+    internal static void PrintHelp()
+    {
+        Console.WriteLine("=== Commands ===");
+        Console.WriteLine(" C  - Clear screen");
+        Console.WriteLine(" E  - Exit");
+        Console.WriteLine(" S  - Show settings");
+        Console.WriteLine(" P  - Toggle proxy");
     }
 
     static string GetCurrentDate() => DateTime.Now.ToString("MM/dd/yyyy");
