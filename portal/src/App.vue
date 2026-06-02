@@ -1,45 +1,16 @@
 <script setup lang="ts">
-  import { computed, onMounted, ref } from 'vue'
-  import type { BalanceResponse } from './model/BalanceResponse'
+  import { ref } from 'vue'
+  import BalanceDisplay from './components/BalanceDisplay.vue'
 
   const isRunning = ref(true)
   const localUrl = "http://localhost:5000/"; // improve this later
-  const userBalance = ref<BalanceResponse | null>(null);
-  let balanceInterval: ReturnType<typeof setInterval> | null = null;
-
-
-  const balanceDisplay = computed(() => {
-    if (!userBalance.value || userBalance.value.balance_infos.length === 0)
-        return 'Loading...';
-    
-    const info = userBalance.value.balance_infos[0];
-    return `${info?.total_balance ?? 0.0} ${info?.currency ?? ''}`;
-  });
-
-  onMounted(() => {
-    if (balanceInterval === null) {
-      fetchUserBalance();
-      balanceInterval = setInterval(fetchUserBalance, 60000);
-    }
-
-  });
 
   async function toggleProxy() {
     isRunning.value = !isRunning.value
     if (isRunning.value) {
-      const response = await fetch(localUrl + 'start');
+      await fetch(localUrl + 'start')
     } else {
-      const response = await fetch(localUrl + 'stop');
-    }
-  }
-
-  async function fetchUserBalance() {
-    try {
-      const response = await fetch(localUrl + 'user/balance');
-      const data: BalanceResponse = await response.json();
-      userBalance.value = data;
-    } catch (error) {
-      console.error('Failed to fetch balance:', error);
+      await fetch(localUrl + 'stop')
     }
   }
 </script>
@@ -60,10 +31,10 @@
 
           <!-- Desktop Menu -->
           <div class="hidden items-center gap-6 md:flex">
-            <button class="rounded-md px-3 py-2 text-sm font-medium transition-colors hover:bg-gray-700 hover:text-white">
+            <span class="rounded-md px-3 py-2 text-sm font-medium transition-colors hover:bg-gray-700 hover:text-white">
               Balance
-              <span>{{ balanceDisplay }}</span>
-            </button>
+              <BalanceDisplay :local-url="localUrl" />
+            </span>
             <button class="rounded-md px-3 py-2 text-sm font-medium transition-colors hover:bg-gray-700 hover:text-white">
               Logs
             </button>
@@ -78,7 +49,7 @@
               {{ isRunning ? 'Running' : 'Stopped' }}
             </span>
             <button @click="toggleProxy"
-                    class="rounded-full px-5 py-2 text-sm font-semibold transition-all focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-800"
+                    class="cursor-pointer rounded-full px-5 py-2 text-sm font-semibold transition-all focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-800"
                     :class="
                 isRunning
                   ? 'bg-red-600 text-white hover:bg-red-500 focus:ring-red-500'
