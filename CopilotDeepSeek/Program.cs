@@ -1,122 +1,101 @@
-﻿namespace CopilotDeepSeek;
-
-using System.Runtime.InteropServices;
+﻿using CopilotDeepSeek.Database.Entities;
 using CopilotDeepSeek.Models;
-using CopilotDeepSeek.Services;
+using Microsoft.Extensions.DependencyInjection;
+
+namespace CopilotDeepSeek;
 
 class Program
 {
     private static bool _appShouldRun = true;
     private static ProxyServer? _proxy;
-
-    [System.Diagnostics.CodeAnalysis.SuppressMessage(
-    "Performance", "CA1859:Use concrete types when possible for improved performance",
-    Justification = "Interface used intentionally to support testability.")]
-    private static readonly ISettingsService _settingsService = new SettingsService();
-
-    // Tracks the current verbosity level for request logging.
-    private static VerbosityLevel _verbosity = VerbosityLevel.None;
+    private static BootstrapResult _ctx = null!;
+    private static VerbosityLevel _verbosity => _ctx.Verbosity;
 
     static void Main(string[] args)
     {
-        ParseArgs(args, out bool hidden, out bool reset, out VerbosityLevel parsedVerbosity);
-        _verbosity = parsedVerbosity;
-
-
-        if (reset)
-            _settingsService.Reset();
-
-        var settings = _settingsService.LoadOrCreate();
-        EnsureApiKey(settings);
-        StartProxyIfAutoRun(settings, hidden);
-
-        if (!hidden)
+        try
         {
-            Helper.PrintTitle();
-            Helper.PrintBanner(_proxy?.IsRunning == true);
-            RunInputLoop(settings);
-        }
-        else
-        {
-            // No UI — block until process is killed
-            Thread.Sleep(Timeout.Infinite);
-        }
+            // All bootstrap in one call
+            _ctx = Bootstrap.Initialize(args);
 
-        _proxy?.Dispose();
-    }
+            // Start proxy if configured to auto-run
+            StartProxyIfAutoRun();
 
-    // -------------------------------------------------------------------------
-    // Arg parsing
-    // -------------------------------------------------------------------------
-
-    private static void ParseArgs(string[] args, out bool hidden, out bool reset, out VerbosityLevel verbosity)
-    {
-        hidden = args.Contains("--hidden", StringComparer.OrdinalIgnoreCase);
-        reset = args.Contains("--reset", StringComparer.OrdinalIgnoreCase);
-
-        verbosity = VerbosityLevel.None;
-
-        for (int i = 0; i < args.Length; i++)
-        {
-            // Support both "--verbosity 1" and "--verbosity=1"
-            ReadOnlySpan<char> arg = args[i];
-
-            if (arg.StartsWith("--verbosity=", StringComparison.OrdinalIgnoreCase))
+            if (!_ctx.Hidden)
             {
-                var valueSpan = arg["--verbosity=".Length..];
-                if (int.TryParse(valueSpan, out int v) && Enum.IsDefined(typeof(VerbosityLevel), v))
-                    verbosity = (VerbosityLevel)v;
+                Helper.PrintTitle();
+                Helper.PrintBanner(_proxy?.IsRunning == true);
+                RunInputLoop();
             }
-            else if (arg.Equals("--verbosity", StringComparison.OrdinalIgnoreCase) && i + 1 < args.Length)
+            else
             {
-                if (int.TryParse(args[i + 1], out int v) && Enum.IsDefined(typeof(VerbosityLevel), v))
-                    verbosity = (VerbosityLevel)v;
+                Thread.Sleep(Timeout.Infinite);
             }
         }
-        // If not defined fallback to 2
-        verbosity = verbosity == VerbosityLevel.None ? VerbosityLevel.All : verbosity;
+        finally
+        {
+            _proxy?.Stop();
+            _proxy?.Dispose();
 
+            (_ctx?.ServiceProvider as IDisposable)?.Dispose();
+        }
     }
 
-    // -------------------------------------------------------------------------
     // API key
-    // -------------------------------------------------------------------------
 
-    private static void EnsureApiKey(Settings settings)
+    private static bool ApikeyExist()
     {
-        if (!string.IsNullOrEmpty(settings.ApiKey))
+        if (!string.IsNullOrEmpty(_ctx.Settings.ApiKey))
+            return true;
+        return false;
+    }
+
+    private static void EnsureApiKey()
+    {
+        if (ApikeyExist())
             return;
 
         Console.WriteLine("No API key found.");
         Console.WriteLine("Paste your DeepSeek API key below (text will be hidden) and press Enter:");
         string apiKey = SecurityHelper.ReadInput();
 
-        settings.ApiKey = SecurityHelper.Encrypt(apiKey);
-        _settingsService.Save(settings);
+        _ctx.Settings.ApiKey = SecurityHelper.Encrypt(apiKey);
+        _ctx.SettingsService.Save(_ctx.Settings);
         Console.WriteLine("API key saved securely.");
     }
 
-    // -------------------------------------------------------------------------
     // Proxy management
-    // -------------------------------------------------------------------------
 
-    private static void StartProxyIfAutoRun(Settings settings, bool hidden)
+    private static void StartProxyIfAutoRun()
     {
-        if (!settings.AutoRun)
+        if (!_ctx.Settings.AutoRun)
             return;
 
-        _proxy = new ProxyServer(settings);
-
-        if (!hidden && _verbosity != VerbosityLevel.None)
-            _proxy.RequestCompleted += OnRequestCompleted;
-
-        if (!_proxy.Start() && !hidden)
+        if (_ctx.Hidden && !ApikeyExist())
         {
-            Console.WriteLine($"Warning: Could not start proxy on port {settings.Port} — port is already in use.");
+            Console.WriteLine("Missing API key.");
+            Environment.Exit(0);
+        }
+
+        EnsureApiKey();
+
+        _proxy = new ProxyServer(_ctx.Settings);
+
+        if (!_ctx.Hidden && _verbosity != VerbosityLevel.None)
+        {
+            _proxy.RequestCompleted += OnRequestCompleted;
+        }
+        // ToDo add setting for loggning 
+        _proxy.RequestCompleted += OnRequestCompletedToDatabase;
+
+
+        if (!_proxy.Start() && !_ctx.Hidden)
+        {
+            Console.WriteLine($"Warning: Could not start proxy on port {_ctx.Settings.Port} — port is already in use.");
         }
     }
 
-    private static void ToggleProxy(Settings settings)
+    private static void ToggleProxy()
     {
         if (_proxy?.IsRunning == true)
         {
@@ -125,21 +104,28 @@ class Program
         }
         else
         {
-            _proxy = new ProxyServer(settings);
+            EnsureApiKey();
+
+            _proxy = new ProxyServer(_ctx.Settings);
+
+            if (_verbosity != VerbosityLevel.None)
+            {
+                _proxy.RequestCompleted += OnRequestCompleted;
+                _proxy.RequestCompleted += OnRequestCompletedToDatabase;
+            }
+
             if (_proxy.Start())
             {
-                Console.WriteLine("Proxy started on port " + settings.Port + ".");
+                Console.WriteLine("Proxy started on port " + _ctx.Settings.Port + ".");
             }
             else
             {
-                Console.WriteLine($"Failed to start proxy — port {settings.Port} is already in use.");
+                Console.WriteLine($"Failed to start proxy — port {_ctx.Settings.Port} is already in use.");
             }
         }
     }
 
-    // -------------------------------------------------------------------------
     // Request callback
-    // -------------------------------------------------------------------------
 
     private static void OnRequestCompleted(ProxyRequestEvent evt)
     {
@@ -169,11 +155,40 @@ class Program
         Console.ResetColor();
     }
 
-    // -------------------------------------------------------------------------
-    // Input loop
-    // -------------------------------------------------------------------------
+    private static void OnRequestCompletedToDatabase(ProxyRequestEvent evt)
+    {
+        _ = Task.Run(async () =>
+        {
+            try
+            {
 
-    private static void RunInputLoop(Settings settings)
+                using var scope = _ctx.ServiceProvider.CreateScope();
+                var dbContext = scope.ServiceProvider.GetRequiredService<CopilotDeepSeek.Database.AppDbContext>();
+
+                dbContext.ProxyRequests.Add(new ProxyRequest
+                {
+                    Id = Guid.CreateVersion7(),
+                    Method = evt.Method,
+                    Path = evt.Path,
+                    StatusCode = evt.StatusCode,
+                    Elapsed = evt.Elapsed,
+                    IsSuccess = evt.IsSuccess,
+                    ErrorMessage = evt.ErrorMessage,
+                    Timestamp = DateTime.UtcNow
+                });
+
+                dbContext.SaveChanges();
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Failed to log request to database: {ex.Message}");
+            }
+        });
+    }
+
+    // Input loop
+
+    private static void RunInputLoop()
     {
         while (_appShouldRun)
         {
@@ -194,14 +209,11 @@ class Program
                     break;
 
                 case var k when k.Key == ConsoleKey.S:
-                    Helper.PrintSettings(settings, _proxy?.IsRunning == true);
+                    Helper.PrintSettings(_ctx.Settings, _proxy?.IsRunning == true);
                     break;
 
                 case var k when k.Key == ConsoleKey.P:
-                    ToggleProxy(settings);
-                    break;
-
-                default:
+                    ToggleProxy();
                     break;
             }
         }
@@ -210,7 +222,6 @@ class Program
     private static void Shutdown()
     {
         Console.WriteLine("Shutting down...");
-        _proxy?.Stop();
         Thread.Sleep(500);
         _appShouldRun = false;
     }
