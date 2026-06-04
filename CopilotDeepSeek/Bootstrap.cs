@@ -70,6 +70,9 @@ internal static class Bootstrap
 
         // Application services
         services.AddSingleton<ISettingsService, SettingsService>();
+
+        // Proxy server
+        services.AddTransient<ProxyServer>();
     }
 
     private static void ParseArgs(

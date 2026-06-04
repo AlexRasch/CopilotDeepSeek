@@ -13,7 +13,12 @@ public class ProxyRequest
     public required string Method { get; set; }
     public required string Path { get; set; }
     public int StatusCode { get; set; }
-    public TimeSpan Elapsed { get; set; }
+
+    /// <summary>
+    /// Request duration in milliseconds.
+    /// </summary>
+    public double ElapsedMs { get; set; }
+    
     public bool IsSuccess { get; set; }
     public string? ErrorMessage { get; set; }
 

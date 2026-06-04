@@ -1,5 +1,7 @@
-﻿using CopilotDeepSeek.Models;
-using CopilotDeepSeek.Constants;
+﻿using CopilotDeepSeek.Constants;
+using CopilotDeepSeek.Models;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Net;
@@ -10,6 +12,8 @@ namespace CopilotDeepSeek;
 
 public class ProxyServer : IDisposable
 {
+    private readonly IServiceScopeFactory _scopeFactory;
+
     private readonly HttpListener _listener;
     private readonly string _targetBase;
     private readonly string _apiKey;
@@ -49,8 +53,10 @@ public class ProxyServer : IDisposable
             isSuccess));
     }
 
-    public ProxyServer(Models.Settings settings)
+    public ProxyServer(Models.Settings settings, IServiceScopeFactory scopeFactory)
     {
+        _scopeFactory = scopeFactory;
+
         Port = settings.Port;
         _listener = new HttpListener();
         _listener.Prefixes.Add($"http://localhost:{settings.Port}/");
@@ -173,6 +179,12 @@ public class ProxyServer : IDisposable
                     await RespondJsonAsync(context, 200, ApiResponse.DeepSeekDisabled());
                     CompleteRequest(sw, context, 200, true);
                     return;
+                // Internal API endpoints
+                case "/api/requests/stats":
+                    await HandleRequestStatsAsync(context);
+                    CompleteRequest(sw, context, 200, true);
+                    return;
+
                 default:
                     // Serve static files from www/ for GET requests with known extensions
                     if (context.Request.HttpMethod == "GET")
@@ -623,6 +635,32 @@ public class ProxyServer : IDisposable
         context.Response.ContentType = "application/json; charset=utf-8";
         context.Response.ContentLength64 = bytes.Length;
         await context.Response.OutputStream.WriteAsync(bytes);
+    }
+
+    private async Task HandleRequestStatsAsync(HttpListenerContext context)
+    {
+        try
+        {
+            using var scope = _scopeFactory.CreateScope();
+            var dbContext = scope.ServiceProvider.GetRequiredService<CopilotDeepSeek.Database.AppDbContext>();
+
+            var stats = await dbContext.ProxyRequests
+                .GroupBy(r => 1)
+                .Select(g => new
+                {
+                    TotalRequests = g.Count(),
+                    SuccessfulRequests = g.Count(r => r.IsSuccess),
+                    FailedRequests = g.Count(r => !r.IsSuccess),
+                    AverageElapsedMs = g.Average(r => r.ElapsedMs)
+                })
+                .FirstOrDefaultAsync();
+
+            await RespondJsonAsync(context, 200, ApiResponse.OkWithData(stats));
+        }
+        catch (Exception ex)
+        {
+            await RespondJsonAsync(context, 500, ApiResponse.ErrorResponse(ex.Message));
+        }
     }
 
     private async Task FetchAndLogBalanceAsync(HttpClient client)

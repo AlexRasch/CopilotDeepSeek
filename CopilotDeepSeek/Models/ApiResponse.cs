@@ -1,4 +1,5 @@
-﻿using System.Text.Json.Serialization;
+﻿using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace CopilotDeepSeek.Models;
 
@@ -28,6 +29,13 @@ public sealed record ApiResponse
     [JsonPropertyName("error")]
     public string? Error { get; init; }
 
+    /// <summary>
+    /// Optional payload for responses that carry data (e.g. stats, lists).
+    /// Serialized as a raw JSON object — use <c>JsonSerializer.SerializeToElement()</c> to populate.
+    /// </summary>
+    [JsonPropertyName("data")]
+    public JsonElement? Data { get; init; }
+
     public static ApiResponse DeepSeekEnabled() =>
         new() { Message = "DeepSeek proxy requests are now enabled", Status = 1 };
 
@@ -36,4 +44,7 @@ public sealed record ApiResponse
 
     public static ApiResponse ErrorResponse(string error) =>
         new() { Message = "An error occurred", Status = -1, Error = error };
+
+    public static ApiResponse OkWithData(object data) =>
+        new() { Message = "Success", Status = 1, Data = JsonSerializer.SerializeToElement(data) };
 }

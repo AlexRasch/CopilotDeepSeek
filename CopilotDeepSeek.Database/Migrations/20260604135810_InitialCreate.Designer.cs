@@ -11,7 +11,7 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace CopilotDeepSeek.Database.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    [Migration("20260604111244_InitialCreate")]
+    [Migration("20260604135810_InitialCreate")]
     partial class InitialCreate
     {
         /// <inheritdoc />
@@ -26,8 +26,8 @@ namespace CopilotDeepSeek.Database.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("TEXT");
 
-                    b.Property<TimeSpan>("Elapsed")
-                        .HasColumnType("TEXT");
+                    b.Property<double>("ElapsedMs")
+                        .HasColumnType("REAL");
 
                     b.Property<string>("ErrorMessage")
                         .HasColumnType("TEXT");

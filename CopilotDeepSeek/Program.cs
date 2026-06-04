@@ -18,6 +18,14 @@ class Program
             // All bootstrap in one call
             _ctx = Bootstrap.Initialize(args);
 
+            _proxy = ActivatorUtilities.CreateInstance<ProxyServer>(_ctx.ServiceProvider, _ctx.Settings);
+
+            if (!_ctx.Hidden && _verbosity != VerbosityLevel.None)
+            {
+                _proxy.RequestCompleted += OnRequestCompleted;
+            }
+            _proxy.RequestCompleted += OnRequestCompletedToDatabase;
+
             // Start proxy if configured to auto-run
             StartProxyIfAutoRun();
 
@@ -79,17 +87,7 @@ class Program
 
         EnsureApiKey();
 
-        _proxy = new ProxyServer(_ctx.Settings);
-
-        if (!_ctx.Hidden && _verbosity != VerbosityLevel.None)
-        {
-            _proxy.RequestCompleted += OnRequestCompleted;
-        }
-        // ToDo add setting for loggning 
-        _proxy.RequestCompleted += OnRequestCompletedToDatabase;
-
-
-        if (!_proxy.Start() && !_ctx.Hidden)
+        if (!_proxy!.Start() && !_ctx.Hidden)
         {
             Console.WriteLine($"Warning: Could not start proxy on port {_ctx.Settings.Port} — port is already in use.");
         }
@@ -106,15 +104,7 @@ class Program
         {
             EnsureApiKey();
 
-            _proxy = new ProxyServer(_ctx.Settings);
-
-            if (_verbosity != VerbosityLevel.None)
-            {
-                _proxy.RequestCompleted += OnRequestCompleted;
-                _proxy.RequestCompleted += OnRequestCompletedToDatabase;
-            }
-
-            if (_proxy.Start())
+            if (_proxy!.Start())
             {
                 Console.WriteLine("Proxy started on port " + _ctx.Settings.Port + ".");
             }
@@ -171,7 +161,7 @@ class Program
                     Method = evt.Method,
                     Path = evt.Path,
                     StatusCode = evt.StatusCode,
-                    Elapsed = evt.Elapsed,
+                    ElapsedMs = evt.Elapsed.TotalMilliseconds,
                     IsSuccess = evt.IsSuccess,
                     ErrorMessage = evt.ErrorMessage,
                     Timestamp = DateTime.UtcNow

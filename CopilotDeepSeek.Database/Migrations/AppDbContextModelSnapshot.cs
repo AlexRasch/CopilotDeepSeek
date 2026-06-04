@@ -23,8 +23,8 @@ namespace CopilotDeepSeek.Database.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("TEXT");
 
-                    b.Property<TimeSpan>("Elapsed")
-                        .HasColumnType("TEXT");
+                    b.Property<double>("ElapsedMs")
+                        .HasColumnType("REAL");
 
                     b.Property<string>("ErrorMessage")
                         .HasColumnType("TEXT");
