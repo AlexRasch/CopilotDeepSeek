@@ -1,41 +1,39 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
-  <PropertyGroup>
-    <OutputType>Exe</OutputType>
-    <TargetFramework>net10.0</TargetFramework>
-    <ImplicitUsings>enable</ImplicitUsings>
-    <Nullable>enable</Nullable>
-    <PublishAot>true</PublishAot>
-    <InvariantGlobalization>true</InvariantGlobalization>
-    <PortalRoot>$(MSBuildThisFileDirectory)..\portal</PortalRoot>
-  </PropertyGroup>
+	<PropertyGroup>
+		<OutputType>Exe</OutputType>
+		<TargetFramework>net10.0</TargetFramework>
+		<ImplicitUsings>enable</ImplicitUsings>
+		<Nullable>enable</Nullable>
+		<PublishAot>true</PublishAot>
+		<InvariantGlobalization>true</InvariantGlobalization>
+		<PortalRoot>$(MSBuildThisFileDirectory)..\portal</PortalRoot>
+	</PropertyGroup>
 
-  <!-- Bygg Vue-portalen och kopiera dist till output -->
-  <Target Name="BuildPortal" BeforeTargets="Build" Condition="Exists('$(PortalRoot)\package.json')">
-    <Message Text="Building Vue portal..." Importance="high" />
-    <Exec Command="npm run build" WorkingDirectory="$(PortalRoot)" />
-  </Target>
+	<ItemGroup>
+		<InternalsVisibleTo Include="CopilotDeepSeekTests" />
+	</ItemGroup>
 
-  <Target Name="CopyPortalOutput" AfterTargets="BuildPortal" Condition="Exists('$(PortalRoot)\dist')">
-    <ItemGroup>
-      <PortalFiles Include="$(PortalRoot)\dist\**\*.*" />
-    </ItemGroup>
-    <Copy
-      SourceFiles="@(PortalFiles)"
-      DestinationFiles="@(PortalFiles->'$(OutDir)www\%(RecursiveDir)%(Filename)%(Extension)')"
-    />
-    <Message Text="Portal copied to $(OutDir)www\" Importance="high" />
-  </Target>
+	<!-- Bygg Vue-portalen och kopiera dist till output -->
+	<Target Name="BuildPortal" BeforeTargets="Build" Condition="Exists('$(PortalRoot)\package.json')">
+		<Message Text="Building Vue portal..." Importance="high" />
+		<Exec Command="npm run build" WorkingDirectory="$(PortalRoot)" />
+	</Target>
 
-  <Target Name="CopyPortalOutputOnPublish" AfterTargets="Publish" Condition="Exists('$(PortalRoot)\dist')">
-    <ItemGroup>
-      <PortalFiles Include="$(PortalRoot)\dist\**\*.*" />
-    </ItemGroup>
-    <Copy
-      SourceFiles="@(PortalFiles)"
-      DestinationFiles="@(PortalFiles->'$(PublishDir)www\%(RecursiveDir)%(Filename)%(Extension)')"
-    />
-    <Message Text="Portal copied to $(PublishDir)www\" Importance="high" />
-  </Target>
+	<Target Name="CopyPortalOutput" AfterTargets="BuildPortal" Condition="Exists('$(PortalRoot)\dist')">
+		<ItemGroup>
+			<PortalFiles Include="$(PortalRoot)\dist\**\*.*" />
+		</ItemGroup>
+		<Copy SourceFiles="@(PortalFiles)" DestinationFiles="@(PortalFiles->'$(OutDir)www\%(RecursiveDir)%(Filename)%(Extension)')" />
+		<Message Text="Portal copied to $(OutDir)www\" Importance="high" />
+	</Target>
+
+	<Target Name="CopyPortalOutputOnPublish" AfterTargets="Publish" Condition="Exists('$(PortalRoot)\dist')">
+		<ItemGroup>
+			<PortalFiles Include="$(PortalRoot)\dist\**\*.*" />
+		</ItemGroup>
+		<Copy SourceFiles="@(PortalFiles)" DestinationFiles="@(PortalFiles->'$(PublishDir)www\%(RecursiveDir)%(Filename)%(Extension)')" />
+		<Message Text="Portal copied to $(PublishDir)www\" Importance="high" />
+	</Target>
 
 </Project>

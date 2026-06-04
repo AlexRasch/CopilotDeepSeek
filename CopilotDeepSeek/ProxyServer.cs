@@ -1,4 +1,5 @@
 ﻿using CopilotDeepSeek.Models;
+using CopilotDeepSeek.Constants;
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Net;
@@ -130,25 +131,6 @@ public class ProxyServer : IDisposable
         this.AllowDeepSeek = false;
     }
 
-    // Flytta till något bättre
-    private static readonly Dictionary<string, string> _staticMimeTypes = new(StringComparer.OrdinalIgnoreCase)
-    {
-        { ".html", "text/html; charset=utf-8" },
-        { ".css",  "text/css" },
-        { ".js",   "application/javascript" },
-        { ".json", "application/json" },
-        { ".png",  "image/png" },
-        { ".jpg",  "image/jpeg" },
-        { ".jpeg", "image/jpeg" },
-        { ".gif",  "image/gif" },
-        { ".svg",  "image/svg+xml" },
-        { ".ico",  "image/x-icon" },
-        { ".woff", "font/woff" },
-        { ".woff2","font/woff2" },
-        { ".ttf",  "font/ttf" },
-        { ".map",  "application/json" },
-    };
-
     private async Task RunLoopAsync(CancellationToken token)
     {
         while (!token.IsCancellationRequested)
@@ -196,7 +178,7 @@ public class ProxyServer : IDisposable
                     if (context.Request.HttpMethod == "GET")
                     {
                         var ext = Path.GetExtension(context.Request.Url!.AbsolutePath);
-                        if (_staticMimeTypes.ContainsKey(ext))
+                        if (MimeTypes.StaticMimeTypes.ContainsKey(ext))
                         {
                             await HandleStaticFileAsync(context, sw);
                             return;
@@ -586,7 +568,7 @@ public class ProxyServer : IDisposable
             var ext = Path.GetExtension(fullPath);
             var bytes = await File.ReadAllBytesAsync(fullPath);
             context.Response.StatusCode = 200;
-            context.Response.ContentType = _staticMimeTypes[ext];
+            context.Response.ContentType = MimeTypes.StaticMimeTypes[ext];
             context.Response.ContentLength64 = bytes.Length;
             await context.Response.OutputStream.WriteAsync(bytes);
             CompleteRequest(sw, context, 200, true);
