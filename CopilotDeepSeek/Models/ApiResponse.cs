@@ -45,6 +45,6 @@ public sealed record ApiResponse
     public static ApiResponse ErrorResponse(string error) =>
         new() { Message = "An error occurred", Status = -1, Error = error };
 
-    public static ApiResponse OkWithData(object data) =>
-        new() { Message = "Success", Status = 1, Data = JsonSerializer.SerializeToElement(data) };
+    public static ApiResponse OkWithData(JsonElement data) =>
+        new() { Message = "Success", Status = 1, Data = data };
 }

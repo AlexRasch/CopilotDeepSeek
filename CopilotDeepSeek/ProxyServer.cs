@@ -646,7 +646,7 @@ public class ProxyServer : IDisposable
 
             var stats = await dbContext.ProxyRequests
                 .GroupBy(r => 1)
-                .Select(g => new
+                .Select(g => new ProxyStats
                 {
                     TotalRequests = g.Count(),
                     SuccessfulRequests = g.Count(r => r.IsSuccess),
@@ -655,7 +655,20 @@ public class ProxyServer : IDisposable
                 })
                 .FirstOrDefaultAsync();
 
-            await RespondJsonAsync(context, 200, ApiResponse.OkWithData(stats));
+            if (stats == null)
+            {
+                JsonSerializer.SerializeToElement(
+                    new ProxyStats
+                    {
+                        TotalRequests = 0,
+                        SuccessfulRequests = 0,
+                        FailedRequests = 0,
+                        AverageElapsedMs = 0
+                    },
+                AppJsonContext.Default.ProxyStats);
+            }
+
+            await RespondJsonAsync(context, 200, ApiResponse.OkWithData(JsonSerializer.SerializeToElement(stats, AppJsonContext.Default.ProxyStats)));
         }
         catch (Exception ex)
         {
