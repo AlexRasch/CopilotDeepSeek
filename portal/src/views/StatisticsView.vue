@@ -1,5 +1,5 @@
 <script setup lang="ts">
-  import { ref, onMounted } from 'vue'
+  import { ref, onMounted, onUnmounted } from 'vue'
   import { Doughnut, Bar } from 'vue-chartjs'
   import {
     Chart as ChartJS,
@@ -21,6 +21,7 @@
   }
 
   const stats = ref<StatsData | null>(null)
+  let refreshTimer: number | null = null
 
   const doughnutData = {
     labels: ['Successful', 'Failed'],
@@ -64,19 +65,28 @@
   }
 
   onMounted(async () => {
+    await fetchStats();
+    setInterval(fetchStats, 60_000);
+  })
+
+  onUnmounted(() => {
+    if (refreshTimer) clearInterval(refreshTimer)
+  })
+
+  async function fetchStats() {
     const response = await fetch('http://localhost:5000/api/requests/stats')
     const json = await response.json()
     stats.value = json.data
-
     doughnutData.datasets[0].data = [
       json.data.successfulRequests,
       json.data.failedRequests,
     ]
-
     barData.datasets[0].data = [json.data.totalRequests]
     barData.datasets[1].data = [json.data.successfulRequests]
     barData.datasets[2].data = [json.data.failedRequests]
-  })
+  }
+
+
 </script>
 
 <template>
