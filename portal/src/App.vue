@@ -35,10 +35,10 @@
               Balance
               <BalanceDisplay :local-url="localUrl" />
             </span>
-            <button class="rounded-md px-3 py-2 text-sm font-medium transition-colors hover:bg-gray-700 hover:text-white">
+            <button class="cursor-pointer rounded-md px-3 py-2 text-sm font-medium transition-colors hover:bg-gray-700 hover:text-white">
               Logs
             </button>
-            <button class="rounded-md px-3 py-2 text-sm font-medium transition-colors hover:bg-gray-700 hover:text-white">
+            <button class="cursor-pointer rounded-md px-3 py-2 text-sm font-medium transition-colors hover:bg-gray-700 hover:text-white">
               Settings
             </button>
           </div>
@@ -65,14 +65,15 @@
     <!-- Mobile Menu (visible below md) -->
     <div class="border-b border-gray-700 bg-gray-800 px-4 py-3 md:hidden">
       <div class="flex items-center justify-center gap-4">
-        <button class="rounded-md px-3 py-2 text-sm font-medium transition-colors hover:bg-gray-700 hover:text-white">
+        <span class="rounded-md px-3 py-2 text-sm font-medium transition-colors hover:bg-gray-700 hover:text-white">
           Balance
-        </button>
-        <button class="rounded-md px-3 py-2 text-sm font-medium transition-colors hover:bg-gray-700 hover:text-white">
-          Status
-        </button>
-        <button class="rounded-md px-3 py-2 text-sm font-medium transition-colors hover:bg-gray-700 hover:text-white">
+          <BalanceDisplay :local-url="localUrl" />
+        </span>
+        <button class="cursor-pointer rounded-md px-3 py-2 text-sm font-medium transition-colors hover:bg-gray-700 hover:text-white">
           Logs
+        </button>
+        <button class="cursor-pointer rounded-md px-3 py-2 text-sm font-medium transition-colors hover:bg-gray-700 hover:text-white">
+          Settings
         </button>
       </div>
     </div>
