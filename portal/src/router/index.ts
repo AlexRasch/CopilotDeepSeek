@@ -2,6 +2,7 @@ import { createRouter, createWebHistory } from 'vue-router'
 //import BalanceView from './views/BalanceView.vue'
 import StatisticsView from '@/views/StatisticsView.vue'
 import LogsView from '@/views/LogsView.vue'
+import LogDetailView from '@/views/LogDetailView.vue'
 //import SettingsView from './views/SettingsView.vue'
 
 const router = createRouter({
@@ -25,6 +26,11 @@ const router = createRouter({
       path: '/logs',
       name: 'logs',
       component: LogsView,
+    },
+    {
+      path: '/logs/:id',
+      name: 'log-detail',
+      component: LogDetailView,
     },
 
     //{

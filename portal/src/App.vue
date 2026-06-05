@@ -35,9 +35,9 @@
               Balance
               <BalanceDisplay :local-url="localUrl" />
             </span>
-            <button class="cursor-pointer rounded-md px-3 py-2 text-sm font-medium transition-colors hover:bg-gray-700 hover:text-white">
+            <router-link to="/statistics" class="cursor-pointer rounded-md px-3 py-2 text-sm font-medium transition-colors hover:bg-gray-700 hover:text-white">
               Statistics
-            </button>
+            </router-link>
             <router-link to="/logs" class="cursor-pointer rounded-md px-3 py-2 text-sm font-medium transition-colors hover:bg-gray-700 hover:text-white">
               Logs
             </router-link>
@@ -72,9 +72,9 @@
           Balance
           <BalanceDisplay :local-url="localUrl" />
         </span>
-        <button class="cursor-pointer rounded-md px-3 py-2 text-sm font-medium transition-colors hover:bg-gray-700 hover:text-white">
+        <router-link to="/statistics" class="cursor-pointer rounded-md px-3 py-2 text-sm font-medium transition-colors hover:bg-gray-700 hover:text-white">
           Statistics
-        </button>
+        </router-link>
         <router-link to="/logs" class="cursor-pointer rounded-md px-3 py-2 text-sm font-medium transition-colors hover:bg-gray-700 hover:text-white">
           Logs
         </router-link>

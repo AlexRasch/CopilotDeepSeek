@@ -1,7 +1,10 @@
 <script setup lang="ts">
   import { ref, computed, onMounted, onUnmounted } from 'vue';
+  import { useRouter } from 'vue-router'
+
   import { formatDate } from '@/utils/dateUtils';
 
+  const router = useRouter()
   const now = new Date();
   const weekAgo = new Date(now);
   weekAgo.setDate(weekAgo.getDate() - 7);
@@ -139,7 +142,7 @@
           </tr>
         </thead>
         <tbody>
-          <tr v-for="log in logsResponse.logs" :key="log.Id" class="border-b border-gray-700 hover:bg-gray-700/50 transition-colors">
+          <tr v-for="log in logsResponse.logs" :key="log.Id" @click="router.push(`/logs/${log.Id}`)" class="cursor-pointer border-b border-gray-700 hover:bg-gray-700/50 transition-colors">
             <td class="px-4 py-3 text-gray-300">{{ log.Id }}</td>
             <td class="px-4 py-3 font-mono text-indigo-400">{{ log.Method }}</td>
             <td class="px-4 py-3 font-mono text-gray-300 max-w-xs truncate">{{ log.Path }}</td>

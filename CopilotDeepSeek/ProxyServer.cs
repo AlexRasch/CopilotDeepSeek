@@ -188,6 +188,11 @@ public class ProxyServer : IDisposable
                     await HandleRequestsLogsAsync(context);
                     CompleteRequest(sw, context, 200, true);
                     return;
+                case "/api/requests/log":
+                    await HandleRequestLogAsync(context);
+                    CompleteRequest(sw, context, 200, true);
+                    return;
+
                 default:
                     // Serve static files from www/ for GET requests with known extensions
                     if (context.Request.HttpMethod == "GET")
@@ -743,6 +748,46 @@ public class ProxyServer : IDisposable
             };
 
             await RespondJsonAsync(context, 200, ApiResponse.OkWithData(JsonSerializer.SerializeToElement(response, AppJsonContext.Default.ProxyRequestLogsResponse)));
+        }
+        catch (Exception ex)
+        {
+            await RespondJsonAsync(context, 500, ApiResponse.ErrorResponse(ex.Message));
+        }
+    }
+
+    private async Task HandleRequestLogAsync(HttpListenerContext context)
+    {
+        try
+        {
+            var query = context.Request.Url?.Query;
+            if (string.IsNullOrEmpty(query))
+            {
+                await RespondJsonAsync(context, 400, ApiResponse.ErrorResponse("Missing 'id' query parameter."));
+                return;
+            }
+
+            var queryParams = System.Web.HttpUtility.ParseQueryString(query);
+            var idStr = queryParams["id"];
+
+            if (string.IsNullOrEmpty(idStr) || !Guid.TryParse(idStr, out var id))
+            {
+                await RespondJsonAsync(context, 400, ApiResponse.ErrorResponse("Invalid or missing 'id' query parameter."));
+                return;
+            }
+
+            using var scope = _scopeFactory.CreateScope();
+            var dbContext = scope.ServiceProvider.GetRequiredService<CopilotDeepSeek.Database.AppDbContext>();
+
+            var logEntry = await dbContext.ProxyRequests.FindAsync(id);
+
+            if (logEntry is null)
+            {
+                await RespondJsonAsync(context, 404, ApiResponse.ErrorResponse("Log entry not found."));
+                return;
+            }
+
+            await RespondJsonAsync(context, 200, ApiResponse.OkWithData(
+                JsonSerializer.SerializeToElement(logEntry, AppJsonContext.Default.ProxyRequest)));
         }
         catch (Exception ex)
         {
