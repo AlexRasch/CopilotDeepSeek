@@ -8,8 +8,10 @@
 		<PublishAot>false</PublishAot>
 		<PublishTrimmed>true</PublishTrimmed>
 		<TrimMode>partial</TrimMode>
-		<DebugType>none</DebugType>
-		<TrimmerRemoveSymbols>true</TrimmerRemoveSymbols>
+
+		<DebugType Condition="'$(Configuration)' == 'Release'">none</DebugType>
+		<TrimmerRemoveSymbols Condition="'$(Configuration)' == 'Release'">true</TrimmerRemoveSymbols>
+		
 		<InvariantGlobalization>true</InvariantGlobalization>
 		<PortalRoot>$(MSBuildThisFileDirectory)..\portal</PortalRoot>
 	</PropertyGroup>

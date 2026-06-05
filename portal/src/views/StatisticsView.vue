@@ -76,14 +76,18 @@
   async function fetchStats() {
     const response = await fetch('http://localhost:5000/api/requests/stats')
     const json = await response.json()
-    stats.value = json.data
-    doughnutData.datasets[0].data = [
-      json.data.successfulRequests,
-      json.data.failedRequests,
-    ]
-    barData.datasets[0].data = [json.data.totalRequests]
-    barData.datasets[1].data = [json.data.successfulRequests]
-    barData.datasets[2].data = [json.data.failedRequests]
+    const d = json.data
+
+    stats.value = d ?? null
+
+    doughnutData.datasets[0]!.data = [
+      d?.successfulRequests ?? 0,
+      d?.failedRequests ?? 0,
+    ];
+
+    barData.datasets[0]!.data = [d?.totalRequests ?? 0];
+    barData.datasets[1]!.data = [d?.successfulRequests ?? 0];
+    barData.datasets[2]!.data = [d?.failedRequests ?? 0];
   }
 
 
