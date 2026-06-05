@@ -184,7 +184,10 @@ public class ProxyServer : IDisposable
                     await HandleRequestStatsAsync(context);
                     CompleteRequest(sw, context, 200, true);
                     return;
-
+                case "/api/requests/logs":
+                    await HandleRequestsLogsAsync(context);
+                    CompleteRequest(sw, context, 200, true);
+                    return;
                 default:
                     // Serve static files from www/ for GET requests with known extensions
                     if (context.Request.HttpMethod == "GET")
@@ -669,6 +672,65 @@ public class ProxyServer : IDisposable
             }
 
             await RespondJsonAsync(context, 200, ApiResponse.OkWithData(JsonSerializer.SerializeToElement(stats, AppJsonContext.Default.ProxyStats)));
+        }
+        catch (Exception ex)
+        {
+            await RespondJsonAsync(context, 500, ApiResponse.ErrorResponse(ex.Message));
+        }
+    }
+
+    private async Task HandleRequestsLogsAsync(HttpListenerContext context)
+    {
+        try
+        {
+            using var scope = _scopeFactory.CreateScope();
+            var dbContext = scope.ServiceProvider.GetRequiredService<CopilotDeepSeek.Database.AppDbContext>();
+
+            // Parse query parameters
+            var query = context.Request.Url?.Query;
+            DateTime? fromDate = null;
+            DateTime? toDate = null;
+
+            if (!string.IsNullOrEmpty(query))
+            {
+                var queryParams = System.Web.HttpUtility.ParseQueryString(query);
+
+                if (DateTime.TryParse(queryParams["from"], out var parsedFrom))
+                {
+                    fromDate = parsedFrom;
+                }
+
+                if (DateTime.TryParse(queryParams["to"], out var parsedTo))
+                {
+                    toDate = parsedTo;
+                }
+            }
+
+            // Build query with optional timestamp filtering
+            var logsQuery = dbContext.ProxyRequests.AsQueryable();
+
+            if (fromDate.HasValue)
+            {
+                logsQuery = logsQuery.Where(r => r.Timestamp >= fromDate.Value);
+            }
+
+            if (toDate.HasValue)
+            {
+                logsQuery = logsQuery.Where(r => r.Timestamp <= toDate.Value);
+            }
+
+            var logs = await logsQuery
+                .OrderByDescending(r => r.Timestamp)
+                .ToListAsync();
+
+            var response = new ProxyRequestLogsResponse
+            {
+                TotalCount = logs.Count,
+                Logs = logs
+            };
+
+
+            await RespondJsonAsync(context, 200, ApiResponse.OkWithData(JsonSerializer.SerializeToElement(response, AppJsonContext.Default.ProxyRequestLogsResponse)));
         }
         catch (Exception ex)
         {
