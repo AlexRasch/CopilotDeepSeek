@@ -1,7 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router'
 //import BalanceView from './views/BalanceView.vue'
 import StatisticsView from '@/views/StatisticsView.vue'
-//import LogsView from './views/LogsView.vue'
+import LogsView from '@/views/LogsView.vue'
 //import SettingsView from './views/SettingsView.vue'
 
 const router = createRouter({
@@ -21,11 +21,12 @@ const router = createRouter({
       name: 'statistics',
       component: StatisticsView,
     },
-    //{
-    //  path: '/logs',
-    //  name: 'logs',
-    //  component: LogsView,
-    //},
+    {
+      path: '/logs',
+      name: 'logs',
+      component: LogsView,
+    },
+
     //{
     //  path: '/settings',
     //  name: 'settings',

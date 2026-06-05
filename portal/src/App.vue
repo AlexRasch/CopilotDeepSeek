@@ -1,6 +1,6 @@
 <script setup lang="ts">
   import { ref } from 'vue'
-  import BalanceDisplay from './components/BalanceDisplay.vue'
+  import BalanceDisplay from '@/components/BalanceDisplay.vue'
 
   const isRunning = ref(true)
   const localUrl = "http://localhost:5000/"; // improve this later
@@ -38,9 +38,9 @@
             <button class="cursor-pointer rounded-md px-3 py-2 text-sm font-medium transition-colors hover:bg-gray-700 hover:text-white">
               Statistics
             </button>
-            <button class="cursor-pointer rounded-md px-3 py-2 text-sm font-medium transition-colors hover:bg-gray-700 hover:text-white">
+            <router-link to="/logs" class="cursor-pointer rounded-md px-3 py-2 text-sm font-medium transition-colors hover:bg-gray-700 hover:text-white">
               Logs
-            </button>
+            </router-link>
             <button class="cursor-pointer rounded-md px-3 py-2 text-sm font-medium transition-colors hover:bg-gray-700 hover:text-white">
               Settings
             </button>
@@ -75,9 +75,9 @@
         <button class="cursor-pointer rounded-md px-3 py-2 text-sm font-medium transition-colors hover:bg-gray-700 hover:text-white">
           Statistics
         </button>
-        <button class="cursor-pointer rounded-md px-3 py-2 text-sm font-medium transition-colors hover:bg-gray-700 hover:text-white">
+        <router-link to="/logs" class="cursor-pointer rounded-md px-3 py-2 text-sm font-medium transition-colors hover:bg-gray-700 hover:text-white">
           Logs
-        </button>
+        </router-link>
         <button class="cursor-pointer rounded-md px-3 py-2 text-sm font-medium transition-colors hover:bg-gray-700 hover:text-white">
           Settings
         </button>
