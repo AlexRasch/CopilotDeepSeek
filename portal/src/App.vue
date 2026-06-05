@@ -41,9 +41,9 @@
             <router-link to="/logs" class="cursor-pointer rounded-md px-3 py-2 text-sm font-medium transition-colors hover:bg-gray-700 hover:text-white">
               Logs
             </router-link>
-            <button class="cursor-pointer rounded-md px-3 py-2 text-sm font-medium transition-colors hover:bg-gray-700 hover:text-white">
+            <router-link to="/settings" class="cursor-pointer rounded-md px-3 py-2 text-sm font-medium transition-colors hover:bg-gray-700 hover:text-white">
               Settings
-            </button>
+            </router-link>
           </div>
 
           <!-- Start / Stop Toggle -->
@@ -78,9 +78,9 @@
         <router-link to="/logs" class="cursor-pointer rounded-md px-3 py-2 text-sm font-medium transition-colors hover:bg-gray-700 hover:text-white">
           Logs
         </router-link>
-        <button class="cursor-pointer rounded-md px-3 py-2 text-sm font-medium transition-colors hover:bg-gray-700 hover:text-white">
+        <router-link to="/settings" class="cursor-pointer rounded-md px-3 py-2 text-sm font-medium transition-colors hover:bg-gray-700 hover:text-white">
           Settings
-        </button>
+        </router-link>
       </div>
     </div>
 

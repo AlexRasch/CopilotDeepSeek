@@ -3,7 +3,7 @@ import { createRouter, createWebHistory } from 'vue-router'
 import StatisticsView from '@/views/StatisticsView.vue'
 import LogsView from '@/views/LogsView.vue'
 import LogDetailView from '@/views/LogDetailView.vue'
-//import SettingsView from './views/SettingsView.vue'
+import SettingsView from '@/views/SettingsView.vue'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -33,11 +33,11 @@ const router = createRouter({
       component: LogDetailView,
     },
 
-    //{
-    //  path: '/settings',
-    //  name: 'settings',
-    //  component: SettingsView,
-    //},
+    {
+      path: '/settings',
+      name: 'settings',
+      component: SettingsView,
+    },
   ],
 })
 

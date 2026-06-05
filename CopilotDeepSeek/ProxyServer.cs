@@ -164,10 +164,12 @@ public class ProxyServer : IDisposable
                 case "/user/balance":
                 case "/models":
                     await HandleSimpleGetAsync(context, sw, context.Request.Url.AbsolutePath);
+                    CompleteRequest(sw, context, 200, true);
                     return;
                 // Portal
                 case "/":
                     await HandleIndexAsync(context, sw);
+                    CompleteRequest(sw, context, 200, true);
                     return;
                 case "/start":
                     this.AllowDeepSeekRequests();
@@ -246,6 +248,7 @@ public class ProxyServer : IDisposable
             {
                 using var reader = new StreamReader(context.Request.InputStream, Encoding.UTF8);
                 var body = await reader.ReadToEndAsync();
+                DumpJson("INCOMING REQUEST BODY", body);
 
                 // Check if this is a chat completions request and inject cached reasoning
                 if (targetUrl.Contains("/chat/completions"))
@@ -257,8 +260,8 @@ public class ProxyServer : IDisposable
                     requestBody = body;
                 }
 
-                forwardRequest.Content = new StringContent(requestBody, Encoding.UTF8,
-                    context.Request.ContentType ?? "application/json");
+                forwardRequest.Content = new StringContent(requestBody, Encoding.UTF8,context.Request.ContentType ?? "application/json");
+                DumpJson("FORWARDED REQUEST BODY", requestBody);
             }
 
             // Forward to DeepSeek
@@ -286,6 +289,7 @@ public class ProxyServer : IDisposable
             else
             {
                 var responseBody = await forwardResponse.Content.ReadAsStringAsync();
+                DumpJson("RESPONSE BODY", responseBody);
 
                 // Cache reasoning content from non-streaming responses
                 if (forwardResponse.IsSuccessStatusCode && targetUrl.Contains("/chat/completions"))
@@ -807,5 +811,15 @@ public class ProxyServer : IDisposable
             }
         }
         catch { /* non-critical */ }
+    }
+
+
+    [Conditional("DEBUG")]
+    private static void DumpJson(string label, string json, int maxLength = 10000)
+    {
+        var truncated = json.Length > maxLength ? json[..maxLength] + $"\n... (truncated, {json.Length} chars total)" : json;
+        Console.Error.WriteLine($"[PROXY] {label}:");
+        Console.Error.WriteLine(truncated);
+        Console.Error.WriteLine();
     }
 }
