@@ -36,6 +36,9 @@
               <BalanceDisplay :local-url="localUrl" />
             </span>
             <button class="cursor-pointer rounded-md px-3 py-2 text-sm font-medium transition-colors hover:bg-gray-700 hover:text-white">
+              Statistics
+            </button>
+            <button class="cursor-pointer rounded-md px-3 py-2 text-sm font-medium transition-colors hover:bg-gray-700 hover:text-white">
               Logs
             </button>
             <button class="cursor-pointer rounded-md px-3 py-2 text-sm font-medium transition-colors hover:bg-gray-700 hover:text-white">
@@ -70,6 +73,9 @@
           <BalanceDisplay :local-url="localUrl" />
         </span>
         <button class="cursor-pointer rounded-md px-3 py-2 text-sm font-medium transition-colors hover:bg-gray-700 hover:text-white">
+          Statistics
+        </button>
+        <button class="cursor-pointer rounded-md px-3 py-2 text-sm font-medium transition-colors hover:bg-gray-700 hover:text-white">
           Logs
         </button>
         <button class="cursor-pointer rounded-md px-3 py-2 text-sm font-medium transition-colors hover:bg-gray-700 hover:text-white">
@@ -81,9 +87,12 @@
     <!-- Main Content Area -->
     <main>
       <div class="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+        <router-view />
+        <!--
         <div class="rounded-lg border border-dashed border-gray-600 p-12 text-center">
           <p class="text-gray-400">Select a menu option to view details</p>
         </div>
+          -->
       </div>
     </main>
   </div>
