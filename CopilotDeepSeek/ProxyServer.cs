@@ -686,49 +686,61 @@ public class ProxyServer : IDisposable
             using var scope = _scopeFactory.CreateScope();
             var dbContext = scope.ServiceProvider.GetRequiredService<CopilotDeepSeek.Database.AppDbContext>();
 
-            // Parse query parameters
             var query = context.Request.Url?.Query;
             DateTime? fromDate = null;
             DateTime? toDate = null;
+            var page = 0;
+            var amount = 50;
 
             if (!string.IsNullOrEmpty(query))
             {
                 var queryParams = System.Web.HttpUtility.ParseQueryString(query);
 
                 if (DateTime.TryParse(queryParams["from"], out var parsedFrom))
-                {
                     fromDate = parsedFrom;
-                }
 
                 if (DateTime.TryParse(queryParams["to"], out var parsedTo))
-                {
                     toDate = parsedTo;
-                }
+
+                if (int.TryParse(queryParams["page"], out var parsedPage) && parsedPage >= 0)
+                    page = parsedPage;
+
+                if (int.TryParse(queryParams["amount"], out var parsedAmount) && parsedAmount > 0)
+                    amount = Math.Min(parsedAmount, 1000);
             }
 
-            // Build query with optional timestamp filtering
             var logsQuery = dbContext.ProxyRequests.AsQueryable();
 
             if (fromDate.HasValue)
-            {
                 logsQuery = logsQuery.Where(r => r.Timestamp >= fromDate.Value);
-            }
 
             if (toDate.HasValue)
-            {
                 logsQuery = logsQuery.Where(r => r.Timestamp <= toDate.Value);
-            }
+
+            var totalCount = await logsQuery.CountAsync();
+            var totalPages = totalCount > 0 ? (int)Math.Ceiling((double)totalCount / amount) : 0;
+
+            // Clamp page to valid range
+            if (totalPages > 0 && page >= totalPages)
+                page = totalPages - 1;
+            else if (page < 0)
+                page = 0;
+
 
             var logs = await logsQuery
                 .OrderByDescending(r => r.Timestamp)
+                .Skip(page * amount)
+                .Take(amount)
                 .ToListAsync();
 
             var response = new ProxyRequestLogsResponse
             {
-                TotalCount = logs.Count,
-                Logs = logs
+                TotalCount = totalCount,
+                Logs = logs,
+                CurrentPage = page,
+                TotalPages = totalPages,
+                PageSize = amount
             };
-
 
             await RespondJsonAsync(context, 200, ApiResponse.OkWithData(JsonSerializer.SerializeToElement(response, AppJsonContext.Default.ProxyRequestLogsResponse)));
         }

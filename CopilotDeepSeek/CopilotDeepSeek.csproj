@@ -24,14 +24,8 @@
 		<ProjectReference Include="..\CopilotDeepSeek.Database\CopilotDeepSeek.Database.csproj" />
 	</ItemGroup>
 
-	<!-- Starta Vite dev-servern automatiskt vid debug -->
-	<Target Name="StartPortalDevServer" BeforeTargets="Build" Condition="'$(Configuration)' == 'Debug' And Exists('$(PortalRoot)\package.json')">
-		<Message Text="Starting Vue dev server..." Importance="high" />
-		<Exec Command="start cmd /c &quot;npm run dev&quot;" WorkingDirectory="$(PortalRoot)" />
-	</Target>
-
 	<!-- Bygg Vue-portalen och kopiera dist till output -->
-	<Target Name="BuildPortal" BeforeTargets="Build" Condition="Exists('$(PortalRoot)\package.json')">
+	<Target Name="BuildPortal" BeforeTargets="Build" Condition="'$(Configuration)' != 'Debug' And Exists('$(PortalRoot)\package.json')">
 		<Message Text="Building Vue portal..." Importance="high" />
 		<Exec Command="npm run build" WorkingDirectory="$(PortalRoot)" />
 	</Target>

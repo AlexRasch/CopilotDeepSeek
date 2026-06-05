@@ -1,23 +1,24 @@
 <script setup lang="ts">
-  import { ref, onMounted, onUnmounted } from 'vue';
+  import { ref, computed, onMounted, onUnmounted } from 'vue';
   import { formatDate } from '@/utils/dateUtils';
 
   const now = new Date();
   const weekAgo = new Date(now);
   weekAgo.setDate(weekAgo.getDate() - 7);
 
-  const url = 'http://localhost:5000/api/requests/logs?from=2026-06-01&to=2026-06-05&page=0&amount=50';
-
   const dateFrom = ref<string>(formatDate(weekAgo));
   const dateTo = ref<string>(formatDate(now));
-  const page = ref<number>(0);
+  const currentPage = ref(0);
   const amount = ref<number>(50);
 
   const logsResponse = ref<ApiLogsResponse | null>(null)
 
   interface ApiLogsResponse {
-    totalCount: string
+    totalCount: number
     logs: Array<ApiLogsResponseEntry>
+    currentPage: number
+    totalPages: number
+    pageSize: number
   }
 
   interface ApiLogsResponseEntry {
@@ -30,6 +31,10 @@
     ErrorMessage: string | null
     Timestamp: Date
   }
+
+  const hasPrev = computed(() => currentPage.value > 0);
+  const hasNext = computed(() => logsResponse.value ? currentPage.value < logsResponse.value.totalPages - 1 : false);
+
 
   const tableHeader = [
     'Id',
@@ -46,8 +51,27 @@
     await fetchLogs();
   });
 
+
   function buildUrl() {
-    return `http://localhost:5000/api/requests/logs?from=${dateFrom.value}&to=${dateTo.value}&page=${page.value}&amount=${amount.value}`;
+    return `http://localhost:5000/api/requests/logs?from=${dateFrom.value}&to=${dateTo.value}&page=${currentPage.value}&amount=${amount.value}`;
+  }
+
+  function prevPage() {
+    if (!hasPrev.value) return;
+    currentPage.value--;
+    fetchLogs();
+  }
+
+  function nextPage() {
+    if (!hasNext.value) return;
+    currentPage.value++;
+    fetchLogs();
+  }
+
+  // Reset page when applying new filters
+  function applyFilters() {
+    currentPage.value = 0;
+    fetchLogs();
   }
 
   async function fetchLogs() {
@@ -132,9 +156,21 @@
           </tr>
         </tbody>
       </table>
-
-      <div class="mt-4 text-sm text-gray-500">
-        Total entries: {{ logsResponse.totalCount }}
+      <!-- Navigation -->
+      <div class="mt-4 flex items-center justify-between text-sm text-gray-500">
+        <span>Total entries: {{ logsResponse.totalCount }}</span>
+        <div class="flex gap-2">
+          <button @click="prevPage" :disabled="!hasPrev"
+                  class="cursor-pointer rounded-md bg-gray-700 px-3 py-1 text-xs font-medium text-gray-300
+                         hover:bg-gray-600 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
+            ← Prev
+          </button>
+          <button @click="nextPage" :disabled="!hasNext"
+                  class="cursor-pointer rounded-md bg-gray-700 px-3 py-1 text-xs font-medium text-gray-300
+                         hover:bg-gray-600 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
+            Next →
+          </button>
+        </div>
       </div>
     </div>
 
