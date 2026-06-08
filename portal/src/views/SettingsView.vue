@@ -1,7 +1,8 @@
 <script setup lang="ts">
   import { ref, onMounted, watch } from 'vue'
 
-  const apiKey = ref('')
+  const apiKey = ref(''); // only used for saving a new api key
+  const hasAPIKey = ref<boolean>(false);
   const baseUrl = ref('https://api.deepseek.com')
   const defaultModel = ref('')
   const port = ref(5000)
@@ -42,8 +43,9 @@
       const response = await fetch('http://localhost:5000/web/settings')
       const json = await response.json()
       if (json.status === 1 && json.data) {
-        apiKey.value = json.data.apiKey ?? ''
-        baseUrl.value = json.data.baseUrl ?? 'https://api.deepseek.com'
+        apiKey.value = json.data.apiKey ?? '',
+          hasAPIKey.value = json.data.HasApiKey ?? false,
+          baseUrl.value = json.data.baseUrl ?? 'https://api.deepseek.com'
         defaultModel.value = json.data.model ?? ''
         port.value = json.data.port ?? 5000
         allowedModels.value = json.data.allowedModels ?? []
@@ -163,7 +165,8 @@
     <div class="rounded-lg border border-gray-700 bg-gray-800 p-6 space-y-5">
       <!-- API Key -->
       <div class="flex flex-col gap-1">
-        <label class="text-xs text-gray-400 font-medium uppercase tracking-wide" for="apiKey">API Key</label>
+        <label class="text-xs text-gray-200 font-medium uppercase tracking-wide" for="apiKey">API Key</label>
+        <p class="text-xs text-gray-300">Update your API key to fetch available models. The key is encrypted before storage.</p>
         <div class="flex gap-2">
           <input id="apiKey" v-model="apiKey" type="password" placeholder="sk-..."
                  class="flex-1 rounded-md border border-gray-600 bg-gray-700 px-3 py-2 text-sm text-gray-200 font-mono
@@ -175,7 +178,24 @@
             {{ saving ? 'Saving…' : 'Update API Key' }}
           </button>
         </div>
-        <p class="text-xs text-gray-500">Update your API key to fetch available models. The key is encrypted before storage.</p>
+        <div v-if="hasAPIKey" class="mt-2 flex items-center gap-3">
+          <span class="inline-flex items-center gap-1.5 rounded-md bg-green-400/10 px-2.5 py-1 text-xs font-medium text-green-400 ring-1 ring-inset ring-green-500/20">
+            <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            API Key is set
+          </span>
+          <span class="text-xs text-gray-500">Your key is encrypted at rest. Enter a new value above to replace it.</span>
+        </div>
+        <div v-else class="mt-2 flex items-center gap-3">
+          <span class="inline-flex items-center gap-1.5 rounded-md bg-red-400/10 px-2.5 py-1 text-xs font-medium text-red-400 ring-1 ring-inset ring-red-500/20">
+            <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
+            </svg>
+            No API Key configured
+          </span>
+          <span class="text-xs text-gray-500">An API key is required for the project to function. Enter one above.</span>
+        </div>
       </div>
 
       <!-- Base URL -->
@@ -261,7 +281,6 @@
       </div>
 
       <!-- Modify Copilot start message -->
-
       <!-- Compress -->
 
       <h3 class="text-1xl">Web interface</h3>
