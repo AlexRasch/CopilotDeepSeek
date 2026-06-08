@@ -185,7 +185,7 @@
             </svg>
             API Key is set
           </span>
-          <span class="text-xs text-gray-500">Your key is encrypted at rest. Enter a new value above to replace it.</span>
+          <span class="text-xs text-gray-300">Your key is encrypted at rest. Enter a new value above to replace it.</span>
         </div>
         <div v-else class="mt-2 flex items-center gap-3">
           <span class="inline-flex items-center gap-1.5 rounded-md bg-red-400/10 px-2.5 py-1 text-xs font-medium text-red-400 ring-1 ring-inset ring-red-500/20">
@@ -194,13 +194,13 @@
             </svg>
             No API Key configured
           </span>
-          <span class="text-xs text-gray-500">An API key is required for the project to function. Enter one above.</span>
+          <span class="text-xs text-gray-300">An API key is required for the project to function. Enter one above.</span>
         </div>
       </div>
 
       <!-- Base URL -->
       <div class="flex flex-col gap-1">
-        <label class="text-xs text-gray-400 font-medium uppercase tracking-wide" for="baseUrl">Base URL</label>
+        <label class="text-xs text-gray-200 font-medium uppercase tracking-wide" for="baseUrl">Base URL</label>
         <input id="baseUrl" v-model="baseUrl" type="text"
                class="rounded-md border border-gray-600 bg-gray-700 px-3 py-2 text-sm text-gray-200 font-mono
                       focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 [color-scheme:dark]" />
@@ -208,7 +208,7 @@
 
       <!-- Port -->
       <div class="flex flex-col gap-1">
-        <label class="text-xs text-gray-400 font-medium uppercase tracking-wide" for="port">Port</label>
+        <label class="text-xs text-gray-200 font-medium uppercase tracking-wide" for="port">Port</label>
         <input id="port" v-model.number="port" type="number" min="1024" max="65535"
                class="w-28 rounded-md border border-gray-600 bg-gray-700 px-3 py-2 text-sm text-gray-200 font-mono
                       focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 [color-scheme:dark]" />
@@ -216,7 +216,7 @@
 
       <!-- Default Model -->
       <div class="flex flex-col gap-1">
-        <label class="text-xs text-gray-400 font-medium uppercase tracking-wide" for="defaultModel">Default Model</label>
+        <label class="text-xs text-gray-200 font-medium uppercase tracking-wide" for="defaultModel">Default Model</label>
         <select id="defaultModel" v-model="defaultModel"
                 class="rounded-md border border-gray-600 bg-gray-700 px-3 py-2 text-sm text-gray-200
                        focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500">
@@ -228,31 +228,31 @@
 
       <!-- Allowed Models -->
       <div class="flex flex-col gap-2">
-        <span class="text-xs text-gray-400 font-medium uppercase tracking-wide">Allowed Models</span>
-        <p class="text-xs text-gray-500">At least one must be selected. The default model is always included.</p>
-        <div v-if="loadingModels" class="text-sm text-gray-400">Loading…</div>
+        <span class="text-xs text-gray-200 font-medium uppercase tracking-wide">Allowed Models</span>
+        <p class="text-xs text-gray-300">At least one must be selected. The default model is always included.</p>
+        <div v-if="loadingModels" class="text-sm text-gray-300">Loading…</div>
         <div v-else class="flex flex-wrap gap-3">
           <label v-for="m in availableModels" :key="m"
                  class="flex items-center gap-2 cursor-pointer rounded-md border px-3 py-2 text-sm transition-colors"
                  :class="allowedModels.includes(m)
                    ? 'border-indigo-500 bg-indigo-900/30 text-indigo-300'
-                   : 'border-gray-600 text-gray-400 hover:border-gray-500'">
+                   : 'border-gray-600 text-gray-200 hover:border-gray-500'">
             <input type="checkbox" :checked="allowedModels.includes(m)"
                    @change="toggleAllowed(m)"
                    class="accent-indigo-500" />
             {{ m }}
           </label>
         </div>
-        <p v-if="availableModels.length === 0 && !loadingModels" class="text-xs text-gray-500">
+        <p v-if="availableModels.length === 0 && !loadingModels" class="text-xs text-gray-300">
           Could not fetch models. Set your API key and save first, then refresh.
         </p>
       </div>
 
-      <h3 class="text-1xl">Request trimming</h3>
+      <h3 class="text-1xl text-gray-200">Request trimming</h3>
 
       <!-- Max Messages -->
       <div class="flex flex-col gap-1">
-        <label class="text-xs text-gray-400 font-medium uppercase tracking-wide" for="maxMessages">
+        <label class="text-xs text-gray-200 font-medium uppercase tracking-wide" for="maxMessages">
           Max Messages
         </label>
         <select id="maxMessages" v-model.number="maxMessages"
@@ -266,14 +266,14 @@
           <option :value="100">100</option>
           <option :value="0">All</option>
         </select>
-        <p class="text-xs text-gray-500">
+        <p class="text-xs text-gray-300">
           {{
             maxMessages === 0
             ? 'Send the full conversation history to DeepSeek.'
             : `Only keep the last ${maxMessages} messages when forwarding to DeepSeek.`
           }}
         </p>
-        <p class="text-xs text-gray-500">
+        <p class="text-xs text-gray-300">
           Lower values reduce token usage and cost, but may lose context from earlier in the conversation.
           <span class="text-indigo-400">{{ maxMessages === 0 ? 'All' : maxMessages >= 20 ? maxMessages : maxMessages === 5 ? '5 is not recommended for longer conversations.' : `${maxMessages} is a good balance.` }}</span>
           Default is <span class="text-indigo-400">All</span>.
@@ -287,14 +287,14 @@
 
       <!-- Balance Refresh Interval -->
       <div class="flex flex-col gap-1">
-        <label class="text-xs text-gray-400 font-medium uppercase tracking-wide" for="refreshInterval">
+        <label class="text-xs text-gray-200 font-medium uppercase tracking-wide" for="refreshInterval">
           Balance Refresh Interval
         </label>
         <div class="flex items-center gap-2">
           <input id="refreshInterval" v-model.number="balanceRefreshIntervalSec" type="number" min="60" max="3600"
                  class="w-28 rounded-md border border-gray-600 bg-gray-700 px-3 py-2 text-sm text-gray-200 font-mono
                         focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 [color-scheme:dark]" />
-          <span class="text-xs text-gray-500">sec</span>
+          <span class="text-xs text-gray-300">sec</span>
         </div>
       </div>
 
