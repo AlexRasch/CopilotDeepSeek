@@ -179,7 +179,7 @@
         </p>
       </div>
 
-      <h3>Request trimming</h3>
+      <h3 class="text-1xl">Request trimming</h3>
 
       <!-- Max Messages -->
       <div class="flex flex-col gap-1">
@@ -213,9 +213,9 @@
 
       <!-- Modify Copilot start message -->
 
-      <!--  -->
+      <!-- Compress -->
 
-      <h3>Web interface</h3>
+      <h3 class="text-1xl">Web interface</h3>
 
       <!-- Balance Refresh Interval -->
       <div class="flex flex-col gap-1">
