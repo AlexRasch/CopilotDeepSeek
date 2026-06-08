@@ -32,7 +32,7 @@ class Program
             if (!_ctx.Hidden)
             {
                 Helper.PrintTitle();
-                Helper.PrintBanner(_proxy?.IsRunning == true);
+                Helper.PrintBanner(_proxy?.IsRunning == true, _ctx.Settings);
                 RunInputLoop();
             }
             else
@@ -58,20 +58,6 @@ class Program
         return false;
     }
 
-    private static void EnsureApiKey()
-    {
-        if (ApikeyExist())
-            return;
-
-        Console.WriteLine("No API key found.");
-        Console.WriteLine("Paste your DeepSeek API key below (text will be hidden) and press Enter:");
-        string apiKey = SecurityHelper.ReadInput();
-
-        _ctx.Settings.ApiKey = SecurityHelper.Encrypt(apiKey);
-        _ctx.SettingsService.Save(_ctx.Settings);
-        Console.WriteLine("API key saved securely.");
-    }
-
     // Proxy management
 
     private static void StartProxyIfAutoRun()
@@ -84,8 +70,6 @@ class Program
             Console.WriteLine("Missing API key.");
             Environment.Exit(0);
         }
-
-        EnsureApiKey();
 
         if (!_proxy!.Start() && !_ctx.Hidden)
         {
@@ -102,7 +86,6 @@ class Program
         }
         else
         {
-            EnsureApiKey();
 
             if (_proxy!.Start())
             {

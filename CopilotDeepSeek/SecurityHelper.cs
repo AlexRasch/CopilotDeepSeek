@@ -35,6 +35,9 @@ public static class SecurityHelper
 
     public static string Decrypt(string encryptedBase64)
     {
+        if (string.IsNullOrEmpty(encryptedBase64))
+            return string.Empty;
+
         byte[] key = DeriveKey();
         byte[] data = Convert.FromBase64String(encryptedBase64);
 
@@ -49,14 +52,5 @@ public static class SecurityHelper
         using var decStream = new CryptoStream(ms, aes.CreateDecryptor(), CryptoStreamMode.Read);
         using var reader = new StreamReader(decStream, Encoding.UTF8);
         return reader.ReadToEnd();
-    }
-
-    public static string ReadInput()
-    {
-        var originalColor = Console.ForegroundColor;
-        Console.ForegroundColor = Console.BackgroundColor;
-        string? input = Console.ReadLine();
-        Console.ForegroundColor = originalColor;
-        return input ?? string.Empty;
     }
 }

@@ -39,7 +39,7 @@
 
   async function fetchSettings() {
     try {
-      const response = await fetch('http://localhost:5000/api/settings')
+      const response = await fetch('http://localhost:5000/web/settings')
       const json = await response.json()
       if (json.status === 1 && json.data) {
         apiKey.value = json.data.apiKey ?? ''
@@ -71,6 +71,46 @@
     }
   })
 
+  async function updateApiKey() {
+    validationError.value = ''
+    saving.value = true
+    saved.value = false
+
+    if (!apiKey.value.trim()) {
+      validationError.value = 'Please enter an API key.'
+      saving.value = false
+      return
+    }
+
+    try {
+      const response = await fetch('http://localhost:5000/web/settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          apiKey: apiKey.value,
+          baseUrl: baseUrl.value,
+          model: defaultModel.value,
+          port: port.value,
+          allowedModels: allowedModels.value,
+          maxMessages: maxMessages.value,
+        }),
+      })
+      const json = await response.json()
+      if (json.status === 1) {
+        saved.value = true
+        setTimeout(() => saved.value = false, 3000)
+        // Re-fetch models now that we have an API key
+        await fetchModels()
+      } else {
+        validationError.value = json.error ?? 'Failed to save API key.'
+      }
+    } catch {
+      validationError.value = 'Network error.'
+    } finally {
+      saving.value = false
+    }
+  }
+
   async function saveSettings() {
     validationError.value = ''
     saving.value = true
@@ -89,8 +129,8 @@
     }
 
     try {
-      const response = await fetch('http://localhost:5000/api/settings/save', {
-        method: 'POST',
+      const response = await fetch('http://localhost:5000/web/settings', {
+        method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           apiKey: apiKey.value,
@@ -98,7 +138,7 @@
           model: defaultModel.value,
           port: port.value,
           allowedModels: allowedModels.value,
-          maxMessages: maxMessages.value, 
+          maxMessages: maxMessages.value,
         }),
       })
       const json = await response.json()
@@ -124,9 +164,18 @@
       <!-- API Key -->
       <div class="flex flex-col gap-1">
         <label class="text-xs text-gray-400 font-medium uppercase tracking-wide" for="apiKey">API Key</label>
-        <input id="apiKey" v-model="apiKey" type="password" placeholder="sk-..."
-               class="rounded-md border border-gray-600 bg-gray-700 px-3 py-2 text-sm text-gray-200 font-mono
-                      focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 [color-scheme:dark]" />
+        <div class="flex gap-2">
+          <input id="apiKey" v-model="apiKey" type="password" placeholder="sk-..."
+                 class="flex-1 rounded-md border border-gray-600 bg-gray-700 px-3 py-2 text-sm text-gray-200 font-mono
+                        focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 [color-scheme:dark]" />
+          <button @click="updateApiKey" :disabled="saving"
+                  class="cursor-pointer shrink-0 rounded-md bg-emerald-600 px-4 py-2 text-sm font-semibold text-white
+                         hover:bg-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 focus:ring-offset-gray-800
+                         disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
+            {{ saving ? 'Saving…' : 'Update API Key' }}
+          </button>
+        </div>
+        <p class="text-xs text-gray-500">Update your API key to fetch available models. The key is encrypted before storage.</p>
       </div>
 
       <!-- Base URL -->
