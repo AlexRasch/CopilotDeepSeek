@@ -8,6 +8,8 @@
   const allowedModels = ref<string[]>([])
   const availableModels = ref<string[]>([])
   const balanceRefreshIntervalSec = ref<number>(60);
+  const maxMessages = ref<number>(0)
+
   const saving = ref(false)
   const loadingModels = ref(true)
   const saved = ref(false)
@@ -45,6 +47,7 @@
         defaultModel.value = json.data.model ?? ''
         port.value = json.data.port ?? 5000
         allowedModels.value = json.data.allowedModels ?? []
+        maxMessages.value = (json.data.maxMessages ?? 0) as number
       }
     } catch { /* ignore */ }
   }
@@ -55,7 +58,7 @@
       if (allowedModels.value.length <= 1) return
       allowedModels.value.splice(idx, 1)
       if (defaultModel.value === model) {
-        defaultModel.value = allowedModels.value[0]
+        defaultModel.value = allowedModels.value[0]!
       }
     } else {
       allowedModels.value.push(model)
@@ -95,6 +98,7 @@
           model: defaultModel.value,
           port: port.value,
           allowedModels: allowedModels.value,
+          maxMessages: maxMessages.value, 
         }),
       })
       const json = await response.json()
