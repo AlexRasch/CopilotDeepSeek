@@ -1,6 +1,8 @@
 ﻿using CopilotDeepSeek.Constants;
 using CopilotDeepSeek.Models;
+using CopilotDeepSeek.Routes;
 using CopilotDeepSeek.Services;
+using CopilotDeepSeek.Utils;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using System.Collections.Concurrent;
@@ -23,6 +25,10 @@ public class ProxyServer : IDisposable
     private Task? _runTask;
 
     private readonly HttpClient _httpClient;
+
+    private readonly List<Route> _routes = new();
+    private readonly RequestContext _requestContext;
+
 
     // Reasoning content cache for multi-turn conversations
     private readonly ConcurrentDictionary<string, string> _reasoningCache = new(StringComparer.Ordinal);
@@ -82,6 +88,9 @@ public class ProxyServer : IDisposable
             new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", _apiKey);
         _httpClient.DefaultRequestHeaders.Accept.Add(
             new System.Net.Http.Headers.MediaTypeWithQualityHeaderValue("application/json"));
+
+        _requestContext = new RequestContext(_scopeFactory, _httpClient, _targetBase, _apiKey, _handler, _reasoningCache);
+        _routes.AddRange(RouteRegistry.GetAll());
     }
 
     /// <summary>
@@ -158,6 +167,17 @@ public class ProxyServer : IDisposable
         var sw = Stopwatch.StartNew();
         try
         {
+            var method = HttpMethodParser.Parse(context.Request.HttpMethod);
+            var path = context.Request.Url!.AbsolutePath;
+
+            var route = _routes.FirstOrDefault(r => r.Method == method && r.Path == path);
+            if (route is not null)
+            {
+                await route.Handler(context, _requestContext);
+                CompleteRequest(sw, context, context.Response.StatusCode, context.Response.StatusCode < 400);
+                return;
+            }
+
             // Route specialized endpoints directly
             switch (context.Request.Url!.AbsolutePath)
             {
