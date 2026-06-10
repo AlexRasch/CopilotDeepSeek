@@ -8,10 +8,10 @@ on:
 jobs:
   release:
     name: Build and publish release
-    runs-on: windows-latest  # AOT på Windows kräver windows runner
+    runs-on: windows-latest  # Windows runner required for self-contained win-x64 builds
 
     permissions:
-      contents: write  # Krävs för att skapa releases
+      contents: write  # Required to create releases
 
     steps:
       - name: Checkout
@@ -22,7 +22,7 @@ jobs:
         with:
           dotnet-version: '10.0.x'
 
-      - name: Setup Node.js (för Vue-portalen)
+      - name: Setup Node.js (for the Vue portal)
         uses: actions/setup-node@v4
         with:
           node-version: '22'
@@ -33,31 +33,35 @@ jobs:
         run: npm ci
         working-directory: portal
 
-      - name: Publish (AOT, self-contained)
+      - name: Publish (self-contained, single-file, trimmed)
         run: |
           dotnet publish CopilotDeepSeek/CopilotDeepSeek.csproj `
             --configuration Release `
             --runtime win-x64 `
             --self-contained true `
+            -p:PublishAot=false `
+            -p:PublishSingleFile=true `
+            -p:PublishTrimmed=true `
+            -p:TrimMode=partial `
             --output ./publish
         shell: pwsh
 
-      - name: Skapa zip av release
+      - name: Create release zip
         run: Compress-Archive -Path ./publish/* -DestinationPath CopilotDeepSeek-win-x64.zip
         shell: pwsh
 
-      - name: Generera versionsnummer (datum + run number)
+      - name: Generate version number (date + run number)
         id: version
         run: echo "tag=v$(Get-Date -Format 'yyyy.MM.dd').${{ github.run_number }}" >> $env:GITHUB_OUTPUT
         shell: pwsh
 
-      - name: Skapa GitHub Release
+      - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.version.outputs.tag }}
           name: Release ${{ steps.version.outputs.tag }}
           body: |
-            Automatisk release från merge till master.
+            Automatic release from merge to master.
             Commit: ${{ github.sha }}
           files: CopilotDeepSeek-win-x64.zip
           draft: false
