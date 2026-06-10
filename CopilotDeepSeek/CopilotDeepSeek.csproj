@@ -5,7 +5,13 @@
 		<TargetFramework>net10.0</TargetFramework>
 		<ImplicitUsings>enable</ImplicitUsings>
 		<Nullable>enable</Nullable>
-		<PublishAot>true</PublishAot>
+		<PublishAot>false</PublishAot>
+		<PublishTrimmed>true</PublishTrimmed>
+		<TrimMode>partial</TrimMode>
+
+		<DebugType Condition="'$(Configuration)' == 'Release'">none</DebugType>
+		<TrimmerRemoveSymbols Condition="'$(Configuration)' == 'Release'">true</TrimmerRemoveSymbols>
+		
 		<InvariantGlobalization>true</InvariantGlobalization>
 		<PortalRoot>$(MSBuildThisFileDirectory)..\portal</PortalRoot>
 	</PropertyGroup>
@@ -14,8 +20,12 @@
 		<InternalsVisibleTo Include="CopilotDeepSeekTests" />
 	</ItemGroup>
 
+	<ItemGroup>
+		<ProjectReference Include="..\CopilotDeepSeek.Database\CopilotDeepSeek.Database.csproj" />
+	</ItemGroup>
+
 	<!-- Bygg Vue-portalen och kopiera dist till output -->
-	<Target Name="BuildPortal" BeforeTargets="Build" Condition="Exists('$(PortalRoot)\package.json')">
+	<Target Name="BuildPortal" BeforeTargets="Build" Condition="'$(Configuration)' != 'Debug' And Exists('$(PortalRoot)\package.json')">
 		<Message Text="Building Vue portal..." Importance="high" />
 		<Exec Command="npm run build" WorkingDirectory="$(PortalRoot)" />
 	</Target>

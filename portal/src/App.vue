@@ -1,6 +1,6 @@
 <script setup lang="ts">
   import { ref } from 'vue'
-  import BalanceDisplay from './components/BalanceDisplay.vue'
+  import BalanceDisplay from '@/components/BalanceDisplay.vue'
 
   const isRunning = ref(true)
   const localUrl = "http://localhost:5000/"; // improve this later
@@ -35,12 +35,15 @@
               Balance
               <BalanceDisplay :local-url="localUrl" />
             </span>
-            <button class="rounded-md px-3 py-2 text-sm font-medium transition-colors hover:bg-gray-700 hover:text-white">
+            <router-link to="/statistics" class="cursor-pointer rounded-md px-3 py-2 text-sm font-medium transition-colors hover:bg-gray-700 hover:text-white">
+              Statistics
+            </router-link>
+            <router-link to="/logs" class="cursor-pointer rounded-md px-3 py-2 text-sm font-medium transition-colors hover:bg-gray-700 hover:text-white">
               Logs
-            </button>
-            <button class="rounded-md px-3 py-2 text-sm font-medium transition-colors hover:bg-gray-700 hover:text-white">
+            </router-link>
+            <router-link to="/settings" class="cursor-pointer rounded-md px-3 py-2 text-sm font-medium transition-colors hover:bg-gray-700 hover:text-white">
               Settings
-            </button>
+            </router-link>
           </div>
 
           <!-- Start / Stop Toggle -->
@@ -65,24 +68,31 @@
     <!-- Mobile Menu (visible below md) -->
     <div class="border-b border-gray-700 bg-gray-800 px-4 py-3 md:hidden">
       <div class="flex items-center justify-center gap-4">
-        <button class="rounded-md px-3 py-2 text-sm font-medium transition-colors hover:bg-gray-700 hover:text-white">
+        <span class="rounded-md px-3 py-2 text-sm font-medium transition-colors hover:bg-gray-700 hover:text-white">
           Balance
-        </button>
-        <button class="rounded-md px-3 py-2 text-sm font-medium transition-colors hover:bg-gray-700 hover:text-white">
-          Status
-        </button>
-        <button class="rounded-md px-3 py-2 text-sm font-medium transition-colors hover:bg-gray-700 hover:text-white">
+          <BalanceDisplay :local-url="localUrl" />
+        </span>
+        <router-link to="/statistics" class="cursor-pointer rounded-md px-3 py-2 text-sm font-medium transition-colors hover:bg-gray-700 hover:text-white">
+          Statistics
+        </router-link>
+        <router-link to="/logs" class="cursor-pointer rounded-md px-3 py-2 text-sm font-medium transition-colors hover:bg-gray-700 hover:text-white">
           Logs
-        </button>
+        </router-link>
+        <router-link to="/settings" class="cursor-pointer rounded-md px-3 py-2 text-sm font-medium transition-colors hover:bg-gray-700 hover:text-white">
+          Settings
+        </router-link>
       </div>
     </div>
 
     <!-- Main Content Area -->
     <main>
       <div class="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+        <router-view />
+        <!--
         <div class="rounded-lg border border-dashed border-gray-600 p-12 text-center">
           <p class="text-gray-400">Select a menu option to view details</p>
         </div>
+          -->
       </div>
     </main>
   </div>

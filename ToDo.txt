@@ -1,1 +1,4 @@
-CORS när vi kör som debug så vi slipper att vue gnäller D:
+- CORS när vi kör som debug så vi slipper att vue gnäller D:
+- Workflow trim 77 -> 24~
+- Ändra ingen .pdb vid publish 
+- Kolla mer på SQLitePCLRaw.provider.dynamic_cdecl

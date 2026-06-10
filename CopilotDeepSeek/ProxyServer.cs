@@ -1,5 +1,8 @@
-﻿using CopilotDeepSeek.Models;
-using CopilotDeepSeek.Constants;
+﻿using CopilotDeepSeek.Constants;
+using CopilotDeepSeek.Models;
+using CopilotDeepSeek.Services;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Net;
@@ -10,6 +13,8 @@ namespace CopilotDeepSeek;
 
 public class ProxyServer : IDisposable
 {
+    private readonly IServiceScopeFactory _scopeFactory;
+
     private readonly HttpListener _listener;
     private readonly string _targetBase;
     private readonly string _apiKey;
@@ -49,8 +54,10 @@ public class ProxyServer : IDisposable
             isSuccess));
     }
 
-    public ProxyServer(Models.Settings settings)
+    public ProxyServer(Models.Settings settings, IServiceScopeFactory scopeFactory)
     {
+        _scopeFactory = scopeFactory;
+
         Port = settings.Port;
         _listener = new HttpListener();
         _listener.Prefixes.Add($"http://localhost:{settings.Port}/");
@@ -154,14 +161,32 @@ public class ProxyServer : IDisposable
             // Route specialized endpoints directly
             switch (context.Request.Url!.AbsolutePath)
             {
+                // OLLAMA
+                case "/api/tags":
+                    await HandleOllamaTagsAsync(context);
+                    CompleteRequest(sw, context, 200, true);
+                    return;
+
                 // Extra DeepSeek API endpoints
                 case "/user/balance":
                 case "/models":
                     await HandleSimpleGetAsync(context, sw, context.Request.Url.AbsolutePath);
+                    CompleteRequest(sw, context, 200, true);
                     return;
-                // Portal
+                // Portal & Ollama health check
                 case "/":
+                    if (context.Request.Headers["Accept"]?.Contains("application/json") == true)
+                    {
+                        var healthBytes = """{"status":"ollama is running"}"""u8;
+                        context.Response.StatusCode = 200;
+                        context.Response.ContentType = "application/json; charset=utf-8";
+                        context.Response.ContentLength64 = healthBytes.Length;
+                        byte[] messageBytes = healthBytes.ToArray();
+                        await context.Response.OutputStream.WriteAsync(messageBytes, 0, messageBytes.Length);
+                        return;
+                    }
                     await HandleIndexAsync(context, sw);
+                    CompleteRequest(sw, context, 200, true);
                     return;
                 case "/start":
                     this.AllowDeepSeekRequests();
@@ -173,6 +198,29 @@ public class ProxyServer : IDisposable
                     await RespondJsonAsync(context, 200, ApiResponse.DeepSeekDisabled());
                     CompleteRequest(sw, context, 200, true);
                     return;
+                // Webinterface API endpoints
+                case "/web/settings":
+                    if(context.Request.HttpMethod == "PUT")
+                        await HandleWebSettingsSaveAsync(context);
+                    else
+                        await HandleWebSettingsReadAsync(context);
+                    CompleteRequest(sw, context, 200, true);
+                    return;
+
+                // Internal API endpoints
+                case "/api/requests/stats":
+                    await HandleRequestStatsAsync(context);
+                    CompleteRequest(sw, context, 200, true);
+                    return;
+                case "/api/requests/logs":
+                    await HandleRequestsLogsAsync(context);
+                    CompleteRequest(sw, context, 200, true);
+                    return;
+                case "/api/requests/log":
+                    await HandleRequestLogAsync(context);
+                    CompleteRequest(sw, context, 200, true);
+                    return;
+
                 default:
                     // Serve static files from www/ for GET requests with known extensions
                     if (context.Request.HttpMethod == "GET")
@@ -226,6 +274,7 @@ public class ProxyServer : IDisposable
             {
                 using var reader = new StreamReader(context.Request.InputStream, Encoding.UTF8);
                 var body = await reader.ReadToEndAsync();
+                DumpJson("INCOMING REQUEST BODY", body);
 
                 // Check if this is a chat completions request and inject cached reasoning
                 if (targetUrl.Contains("/chat/completions"))
@@ -237,8 +286,8 @@ public class ProxyServer : IDisposable
                     requestBody = body;
                 }
 
-                forwardRequest.Content = new StringContent(requestBody, Encoding.UTF8,
-                    context.Request.ContentType ?? "application/json");
+                forwardRequest.Content = new StringContent(requestBody, Encoding.UTF8,context.Request.ContentType ?? "application/json");
+                DumpJson("FORWARDED REQUEST BODY", requestBody);
             }
 
             // Forward to DeepSeek
@@ -266,6 +315,7 @@ public class ProxyServer : IDisposable
             else
             {
                 var responseBody = await forwardResponse.Content.ReadAsStringAsync();
+                DumpJson("RESPONSE BODY", responseBody);
 
                 // Cache reasoning content from non-streaming responses
                 if (forwardResponse.IsSuccessStatusCode && targetUrl.Contains("/chat/completions"))
@@ -625,6 +675,156 @@ public class ProxyServer : IDisposable
         await context.Response.OutputStream.WriteAsync(bytes);
     }
 
+    private async Task HandleRequestStatsAsync(HttpListenerContext context)
+    {
+        try
+        {
+            using var scope = _scopeFactory.CreateScope();
+            var dbContext = scope.ServiceProvider.GetRequiredService<CopilotDeepSeek.Database.AppDbContext>();
+
+            var stats = await dbContext.ProxyRequests
+                .GroupBy(r => 1)
+                .Select(g => new ProxyStats
+                {
+                    TotalRequests = g.Count(),
+                    SuccessfulRequests = g.Count(r => r.IsSuccess),
+                    FailedRequests = g.Count(r => !r.IsSuccess),
+                    AverageElapsedMs = g.Average(r => r.ElapsedMs)
+                })
+                .FirstOrDefaultAsync();
+
+            if (stats == null)
+            {
+                JsonSerializer.SerializeToElement(
+                    new ProxyStats
+                    {
+                        TotalRequests = 0,
+                        SuccessfulRequests = 0,
+                        FailedRequests = 0,
+                        AverageElapsedMs = 0
+                    },
+                AppJsonContext.Default.ProxyStats);
+            }
+
+            await RespondJsonAsync(context, 200, ApiResponse.OkWithData(JsonSerializer.SerializeToElement(stats, AppJsonContext.Default.ProxyStats)));
+        }
+        catch (Exception ex)
+        {
+            await RespondJsonAsync(context, 500, ApiResponse.ErrorResponse(ex.Message));
+        }
+    }
+
+    private async Task HandleRequestsLogsAsync(HttpListenerContext context)
+    {
+        try
+        {
+            using var scope = _scopeFactory.CreateScope();
+            var dbContext = scope.ServiceProvider.GetRequiredService<CopilotDeepSeek.Database.AppDbContext>();
+
+            var query = context.Request.Url?.Query;
+            DateTime? fromDate = null;
+            DateTime? toDate = null;
+            var page = 0;
+            var amount = 50;
+
+            if (!string.IsNullOrEmpty(query))
+            {
+                var queryParams = System.Web.HttpUtility.ParseQueryString(query);
+
+                if (DateTime.TryParse(queryParams["from"], out var parsedFrom))
+                    fromDate = parsedFrom;
+
+                if (DateTime.TryParse(queryParams["to"], out var parsedTo))
+                    toDate = parsedTo;
+
+                if (int.TryParse(queryParams["page"], out var parsedPage) && parsedPage >= 0)
+                    page = parsedPage;
+
+                if (int.TryParse(queryParams["amount"], out var parsedAmount) && parsedAmount > 0)
+                    amount = Math.Min(parsedAmount, 1000);
+            }
+
+            var logsQuery = dbContext.ProxyRequests.AsQueryable();
+
+            if (fromDate.HasValue)
+                logsQuery = logsQuery.Where(r => r.Timestamp >= fromDate.Value);
+
+            if (toDate.HasValue)
+                logsQuery = logsQuery.Where(r => r.Timestamp < toDate.Value.AddDays(1));
+
+            var totalCount = await logsQuery.CountAsync();
+            var totalPages = totalCount > 0 ? (int)Math.Ceiling((double)totalCount / amount) : 0;
+
+            // Clamp page to valid range
+            if (totalPages > 0 && page >= totalPages)
+                page = totalPages - 1;
+            else if (page < 0)
+                page = 0;
+
+
+            var logs = await logsQuery
+                .OrderByDescending(r => r.Timestamp)
+                .Skip(page * amount)
+                .Take(amount)
+                .ToListAsync();
+
+            var response = new ProxyRequestLogsResponse
+            {
+                TotalCount = totalCount,
+                Logs = logs,
+                CurrentPage = page,
+                TotalPages = totalPages,
+                PageSize = amount
+            };
+
+            await RespondJsonAsync(context, 200, ApiResponse.OkWithData(JsonSerializer.SerializeToElement(response, AppJsonContext.Default.ProxyRequestLogsResponse)));
+        }
+        catch (Exception ex)
+        {
+            await RespondJsonAsync(context, 500, ApiResponse.ErrorResponse(ex.Message));
+        }
+    }
+
+    private async Task HandleRequestLogAsync(HttpListenerContext context)
+    {
+        try
+        {
+            var query = context.Request.Url?.Query;
+            if (string.IsNullOrEmpty(query))
+            {
+                await RespondJsonAsync(context, 400, ApiResponse.ErrorResponse("Missing 'id' query parameter."));
+                return;
+            }
+
+            var queryParams = System.Web.HttpUtility.ParseQueryString(query);
+            var idStr = queryParams["id"];
+
+            if (string.IsNullOrEmpty(idStr) || !Guid.TryParse(idStr, out var id))
+            {
+                await RespondJsonAsync(context, 400, ApiResponse.ErrorResponse("Invalid or missing 'id' query parameter."));
+                return;
+            }
+
+            using var scope = _scopeFactory.CreateScope();
+            var dbContext = scope.ServiceProvider.GetRequiredService<CopilotDeepSeek.Database.AppDbContext>();
+
+            var logEntry = await dbContext.ProxyRequests.FindAsync(id);
+
+            if (logEntry is null)
+            {
+                await RespondJsonAsync(context, 404, ApiResponse.ErrorResponse("Log entry not found."));
+                return;
+            }
+
+            await RespondJsonAsync(context, 200, ApiResponse.OkWithData(
+                JsonSerializer.SerializeToElement(logEntry, AppJsonContext.Default.ProxyRequest)));
+        }
+        catch (Exception ex)
+        {
+            await RespondJsonAsync(context, 500, ApiResponse.ErrorResponse(ex.Message));
+        }
+    }
+
     private async Task FetchAndLogBalanceAsync(HttpClient client)
     {
         try
@@ -637,5 +837,159 @@ public class ProxyServer : IDisposable
             }
         }
         catch { /* non-critical */ }
+    }
+
+
+    // Ollama
+
+    /// <summary>
+    /// Fetches the real model list from DeepSeek's /models endpoint and
+    /// transforms it into an Ollama-compatible /api/tags response.
+    /// </summary>
+    private async Task HandleOllamaTagsAsync(HttpListenerContext context)
+    {
+        try
+        {
+            using var response = await _httpClient.GetAsync($"{_targetBase}/models");
+
+            if (!response.IsSuccessStatusCode)
+            {
+                
+                return;
+            }
+
+            var json = await response.Content.ReadAsStringAsync();
+            using var doc = JsonDocument.Parse(json);
+            var root = doc.RootElement;
+
+            using var ms = new MemoryStream();
+            using var writer = new Utf8JsonWriter(ms);
+
+            writer.WriteStartObject();
+            writer.WritePropertyName("models");
+            writer.WriteStartArray();
+
+            if (root.TryGetProperty("data", out var data) && data.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var model in data.EnumerateArray())
+                {
+                    var id = model.TryGetProperty("id", out var idProp) ? idProp.GetString() : null;
+                    if (string.IsNullOrEmpty(id)) continue;
+
+                    var modelTag = $"{id}:latest";
+                    var digest = Convert.ToHexString(
+                        System.Security.Cryptography.SHA256.HashData(
+                            Encoding.UTF8.GetBytes(id)))
+                        .ToLowerInvariant();
+
+                    writer.WriteStartObject();
+                    writer.WriteString("name", modelTag);
+                    writer.WriteString("model", modelTag);
+                    writer.WriteString("modified_at", "2024-01-01T00:00:00Z");
+                    writer.WriteNumber("size", 3821945920L);
+                    writer.WriteString("digest", $"sha256:{digest}");
+
+                    writer.WriteStartObject("details");
+                    writer.WriteString("parent_model", "");
+                    writer.WriteString("format", "gguf");
+                    writer.WriteString("family", id.Split('-')[0]);
+                    writer.WriteStartArray("families");
+                    writer.WriteStringValue("deepseek");
+                    writer.WriteEndArray();
+                    writer.WriteString("parameter_size", "7B");
+                    writer.WriteString("quantization_level", "Q4_K_M");
+                    writer.WriteEndObject();
+
+                    writer.WriteEndObject();
+                }
+            }
+
+            writer.WriteEndArray();
+            writer.WriteEndObject();
+            writer.Flush();
+
+            var bytes = ms.ToArray();
+            context.Response.StatusCode = 200;
+            context.Response.ContentType = "application/json; charset=utf-8";
+            context.Response.ContentLength64 = bytes.Length;
+            await context.Response.OutputStream.WriteAsync(bytes);
+        }
+        catch (Exception ex)
+        {
+            context.Response.StatusCode = 502;
+            var error = Encoding.UTF8.GetBytes($"{{\"error\":\"{ex.Message}\"}}");
+            await context.Response.OutputStream.WriteAsync(error);
+        }
+    }
+
+
+    private async Task HandleWebSettingsReadAsync(HttpListenerContext context)
+    {
+        try
+        {
+            if (context.Request.HttpMethod != "GET")
+            {
+                await RespondJsonAsync(context, 405, ApiResponse.ErrorResponse("Method not allowed. Use GET."));
+                return;
+            }
+
+            using var scope = _scopeFactory.CreateScope();
+            var settingsService = scope.ServiceProvider.GetRequiredService<ISettingsService>();
+            var settings = settingsService.LoadForWebInterface();
+
+            await RespondJsonAsync(context, 200, 
+                ApiResponse.OkWithData(JsonSerializer.SerializeToElement(settings, AppJsonContext.Default.Settings)));
+        }
+        catch (Exception ex)
+        {
+            await RespondJsonAsync(context, 500, ApiResponse.ErrorResponse(ex.Message));
+        }
+    }
+
+    private async Task HandleWebSettingsSaveAsync(HttpListenerContext context)
+    {
+        try
+        {
+            if (context.Request.HttpMethod != "PUT")
+            {
+                await RespondJsonAsync(context, 405, ApiResponse.ErrorResponse("Method not allowed. Use PUT."));
+                return;
+            }
+
+            using var reader = new StreamReader(context.Request.InputStream, Encoding.UTF8);
+            var body = await reader.ReadToEndAsync();
+
+            var settings = JsonSerializer.Deserialize<Settings>(body, AppJsonContext.Default.Settings);
+            if(settings is null)
+            {
+                await RespondJsonAsync(context, 400, ApiResponse.ErrorResponse("Invalid JSON body."));
+                return;
+            }
+
+            using var scope = _scopeFactory.CreateScope();
+            var settingsService = scope.ServiceProvider.GetRequiredService<ISettingsService>();
+            settingsService.Save(settings);
+
+            await RespondJsonAsync(
+                context,
+                200,
+                ApiResponse.OkWithData(JsonSerializer.SerializeToElement(
+                    new ApiResponse { },
+                    AppJsonContext.Default.ApiResponse)
+                ));
+        }
+        catch (Exception ex)
+        {
+            await RespondJsonAsync(context, 500, ApiResponse.ErrorResponse(ex.Message));
+        }
+    }
+
+    [Conditional("DEBUG")]
+    private static void DumpJson(string label, string json, int maxLength = 10000)
+    {
+        var truncated = json.Length > maxLength ? json[..maxLength] + $"\n... (truncated, {json.Length} chars total)" : json;
+        Console.Error.WriteLine($"[PROXY] {label}:");
+        Console.Error.WriteLine(truncated);
+        Console.Error.WriteLine();
     }
 }
