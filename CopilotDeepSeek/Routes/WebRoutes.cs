@@ -1,5 +1,6 @@
 ﻿using CopilotDeepSeek.Models;
 using CopilotDeepSeek.Services;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using System.Net;
 using System.Text;
@@ -58,5 +59,43 @@ namespace CopilotDeepSeek.Routes
             }
         }
 
+        public static async Task HandleRequestStatsAsync(HttpListenerContext context, RequestContext ctx)
+        {
+            try
+            {
+                using var scope = ctx.ScopeFactory.CreateScope();
+                var dbContext = scope.ServiceProvider.GetRequiredService<CopilotDeepSeek.Database.AppDbContext>();
+
+                var stats = await dbContext.ProxyRequests
+                    .GroupBy(r => 1)
+                    .Select(g => new ProxyStats
+                    {
+                        TotalRequests = g.Count(),
+                        SuccessfulRequests = g.Count(r => r.IsSuccess),
+                        FailedRequests = g.Count(r => !r.IsSuccess),
+                        AverageElapsedMs = g.Average(r => r.ElapsedMs)
+                    })
+                    .FirstOrDefaultAsync();
+
+                if (stats == null)
+                {
+                    JsonSerializer.SerializeToElement(
+                        new ProxyStats
+                        {
+                            TotalRequests = 0,
+                            SuccessfulRequests = 0,
+                            FailedRequests = 0,
+                            AverageElapsedMs = 0
+                        },
+                    AppJsonContext.Default.ProxyStats);
+                }
+
+                await RequestContext.RespondJsonAsync(context, 200, ApiResponse.OkWithData(JsonSerializer.SerializeToElement(stats, AppJsonContext.Default.ProxyStats)));
+            }
+            catch (Exception ex)
+            {
+                await RequestContext.RespondJsonAsync(context, 500, ApiResponse.ErrorResponse(ex.Message));
+            }
+        }
     }
 }

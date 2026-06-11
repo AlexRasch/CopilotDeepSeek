@@ -215,21 +215,8 @@ public class ProxyServer : IDisposable
                     return;
 
                 // Proxy
-                case "/start":
-                    this.AllowDeepSeekRequests();
-                    await RespondJsonAsync(context, 200, ApiResponse.DeepSeekEnabled());
-                    CompleteRequest(sw, context, 200, true);
-                    return;
-                case "/stop":
-                    this.DenyDeepSeekRequests();
-                    await RespondJsonAsync(context, 200, ApiResponse.DeepSeekDisabled());
-                    CompleteRequest(sw, context, 200, true);
-                    return;
+
                 // Internal API endpoints
-                case "/api/requests/stats":
-                    await HandleRequestStatsAsync(context);
-                    CompleteRequest(sw, context, 200, true);
-                    return;
                 case "/api/requests/logs":
                     await HandleRequestsLogsAsync(context);
                     CompleteRequest(sw, context, 200, true);
@@ -693,44 +680,7 @@ public class ProxyServer : IDisposable
         await context.Response.OutputStream.WriteAsync(bytes);
     }
 
-    private async Task HandleRequestStatsAsync(HttpListenerContext context)
-    {
-        try
-        {
-            using var scope = _scopeFactory.CreateScope();
-            var dbContext = scope.ServiceProvider.GetRequiredService<CopilotDeepSeek.Database.AppDbContext>();
 
-            var stats = await dbContext.ProxyRequests
-                .GroupBy(r => 1)
-                .Select(g => new ProxyStats
-                {
-                    TotalRequests = g.Count(),
-                    SuccessfulRequests = g.Count(r => r.IsSuccess),
-                    FailedRequests = g.Count(r => !r.IsSuccess),
-                    AverageElapsedMs = g.Average(r => r.ElapsedMs)
-                })
-                .FirstOrDefaultAsync();
-
-            if (stats == null)
-            {
-                JsonSerializer.SerializeToElement(
-                    new ProxyStats
-                    {
-                        TotalRequests = 0,
-                        SuccessfulRequests = 0,
-                        FailedRequests = 0,
-                        AverageElapsedMs = 0
-                    },
-                AppJsonContext.Default.ProxyStats);
-            }
-
-            await RespondJsonAsync(context, 200, ApiResponse.OkWithData(JsonSerializer.SerializeToElement(stats, AppJsonContext.Default.ProxyStats)));
-        }
-        catch (Exception ex)
-        {
-            await RespondJsonAsync(context, 500, ApiResponse.ErrorResponse(ex.Message));
-        }
-    }
 
     private async Task HandleRequestsLogsAsync(HttpListenerContext context)
     {

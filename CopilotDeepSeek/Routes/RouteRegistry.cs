@@ -24,7 +24,7 @@ public static class RouteRegistry
         yield return new Route(ProxyRequestMethod.GET, "/web-api/stop", ProxyRoutes.HandleStop);
         yield return new Route(ProxyRequestMethod.GET, "/web-api/settings", WebRoutes.HandleWebSettingsReadAsync);
         yield return new Route(ProxyRequestMethod.PUT, "/web-api/settings", WebRoutes.HandleWebSettingsSaveAsync);
-
+        yield return new Route(ProxyRequestMethod.GET, "/web-api/stats", WebRoutes.HandleRequestStatsAsync);
 
         // Web portal & settings
         //yield return new Route("GET", "/", WebRoutes.HandleIndex);
