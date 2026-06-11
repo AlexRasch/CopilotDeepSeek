@@ -214,18 +214,6 @@ public class ProxyServer : IDisposable
                     CompleteRequest(sw, context, 200, true);
                     return;
 
-                // Proxy
-
-                // Internal API endpoints
-                case "/api/requests/logs":
-                    await HandleRequestsLogsAsync(context);
-                    CompleteRequest(sw, context, 200, true);
-                    return;
-                case "/api/requests/log":
-                    await HandleRequestLogAsync(context);
-                    CompleteRequest(sw, context, 200, true);
-                    return;
-
                 default:
                     // Serve static files from www/ for GET requests with known extensions
                     if (context.Request.HttpMethod == "GET")
@@ -679,120 +667,6 @@ public class ProxyServer : IDisposable
         context.Response.ContentLength64 = bytes.Length;
         await context.Response.OutputStream.WriteAsync(bytes);
     }
-
-
-
-    private async Task HandleRequestsLogsAsync(HttpListenerContext context)
-    {
-        try
-        {
-            using var scope = _scopeFactory.CreateScope();
-            var dbContext = scope.ServiceProvider.GetRequiredService<CopilotDeepSeek.Database.AppDbContext>();
-
-            var query = context.Request.Url?.Query;
-            DateTime? fromDate = null;
-            DateTime? toDate = null;
-            var page = 0;
-            var amount = 50;
-
-            if (!string.IsNullOrEmpty(query))
-            {
-                var queryParams = System.Web.HttpUtility.ParseQueryString(query);
-
-                if (DateTime.TryParse(queryParams["from"], out var parsedFrom))
-                    fromDate = parsedFrom;
-
-                if (DateTime.TryParse(queryParams["to"], out var parsedTo))
-                    toDate = parsedTo;
-
-                if (int.TryParse(queryParams["page"], out var parsedPage) && parsedPage >= 0)
-                    page = parsedPage;
-
-                if (int.TryParse(queryParams["amount"], out var parsedAmount) && parsedAmount > 0)
-                    amount = Math.Min(parsedAmount, 1000);
-            }
-
-            var logsQuery = dbContext.ProxyRequests.AsQueryable();
-
-            if (fromDate.HasValue)
-                logsQuery = logsQuery.Where(r => r.Timestamp >= fromDate.Value);
-
-            if (toDate.HasValue)
-                logsQuery = logsQuery.Where(r => r.Timestamp < toDate.Value.AddDays(1));
-
-            var totalCount = await logsQuery.CountAsync();
-            var totalPages = totalCount > 0 ? (int)Math.Ceiling((double)totalCount / amount) : 0;
-
-            // Clamp page to valid range
-            if (totalPages > 0 && page >= totalPages)
-                page = totalPages - 1;
-            else if (page < 0)
-                page = 0;
-
-
-            var logs = await logsQuery
-                .OrderByDescending(r => r.Timestamp)
-                .Skip(page * amount)
-                .Take(amount)
-                .ToListAsync();
-
-            var response = new ProxyRequestLogsResponse
-            {
-                TotalCount = totalCount,
-                Logs = logs,
-                CurrentPage = page,
-                TotalPages = totalPages,
-                PageSize = amount
-            };
-
-            await RespondJsonAsync(context, 200, ApiResponse.OkWithData(JsonSerializer.SerializeToElement(response, AppJsonContext.Default.ProxyRequestLogsResponse)));
-        }
-        catch (Exception ex)
-        {
-            await RespondJsonAsync(context, 500, ApiResponse.ErrorResponse(ex.Message));
-        }
-    }
-
-    private async Task HandleRequestLogAsync(HttpListenerContext context)
-    {
-        try
-        {
-            var query = context.Request.Url?.Query;
-            if (string.IsNullOrEmpty(query))
-            {
-                await RespondJsonAsync(context, 400, ApiResponse.ErrorResponse("Missing 'id' query parameter."));
-                return;
-            }
-
-            var queryParams = System.Web.HttpUtility.ParseQueryString(query);
-            var idStr = queryParams["id"];
-
-            if (string.IsNullOrEmpty(idStr) || !Guid.TryParse(idStr, out var id))
-            {
-                await RespondJsonAsync(context, 400, ApiResponse.ErrorResponse("Invalid or missing 'id' query parameter."));
-                return;
-            }
-
-            using var scope = _scopeFactory.CreateScope();
-            var dbContext = scope.ServiceProvider.GetRequiredService<CopilotDeepSeek.Database.AppDbContext>();
-
-            var logEntry = await dbContext.ProxyRequests.FindAsync(id);
-
-            if (logEntry is null)
-            {
-                await RespondJsonAsync(context, 404, ApiResponse.ErrorResponse("Log entry not found."));
-                return;
-            }
-
-            await RespondJsonAsync(context, 200, ApiResponse.OkWithData(
-                JsonSerializer.SerializeToElement(logEntry, AppJsonContext.Default.ProxyRequest)));
-        }
-        catch (Exception ex)
-        {
-            await RespondJsonAsync(context, 500, ApiResponse.ErrorResponse(ex.Message));
-        }
-    }
-
 
     // Ollama
 

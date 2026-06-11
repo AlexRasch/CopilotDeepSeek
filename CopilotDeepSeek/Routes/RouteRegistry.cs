@@ -25,15 +25,12 @@ public static class RouteRegistry
         yield return new Route(ProxyRequestMethod.GET, "/web-api/settings", WebRoutes.HandleWebSettingsReadAsync);
         yield return new Route(ProxyRequestMethod.PUT, "/web-api/settings", WebRoutes.HandleWebSettingsSaveAsync);
         yield return new Route(ProxyRequestMethod.GET, "/web-api/stats", WebRoutes.HandleRequestStatsAsync);
+        yield return new Route(ProxyRequestMethod.GET, "/web-api/log", WebRoutes.HandleRequestLogAsync);
+        yield return new Route(ProxyRequestMethod.GET, "/web-api/logs", WebRoutes.HandleRequestsLogsAsync);
+
 
         // Web portal & settings
         //yield return new Route("GET", "/", WebRoutes.HandleIndex);
-        //
-        //// Internal API
-        //yield return new Route("GET", "/api/requests/stats", ApiRoutes.HandleStats);
-        //yield return new Route("GET", "/api/requests/logs", ApiRoutes.HandleLogs);
-        //yield return new Route("GET", "/api/requests/log", ApiRoutes.HandleLog);
-
         // DeepSeek API passthrough
         //yield return new Route("GET", "/user/balance", ProxyRoutes.HandleSimpleGet);
         //yield return new Route("GET", "/models", ProxyRoutes.HandleSimpleGet);
