@@ -225,15 +225,6 @@ public class ProxyServer : IDisposable
                     await RespondJsonAsync(context, 200, ApiResponse.DeepSeekDisabled());
                     CompleteRequest(sw, context, 200, true);
                     return;
-                // Webinterface API endpoints
-                case "/web/settings":
-                    if (context.Request.HttpMethod == "PUT")
-                        await HandleWebSettingsSaveAsync(context);
-                    else
-                        await HandleWebSettingsReadAsync(context);
-                    CompleteRequest(sw, context, 200, true);
-                    return;
-
                 // Internal API endpoints
                 case "/api/requests/stats":
                     await HandleRequestStatsAsync(context);
@@ -852,20 +843,6 @@ public class ProxyServer : IDisposable
         }
     }
 
-    private async Task FetchAndLogBalanceAsync(HttpClient client)
-    {
-        try
-        {
-            var resp = await client.GetAsync($"{_targetBase}/user/balance");
-            if (resp.IsSuccessStatusCode)
-            {
-                var json = await resp.Content.ReadAsStringAsync();
-                Console.WriteLine($"  Balance: {json}");
-            }
-        }
-        catch { /* non-critical */ }
-    }
-
 
     // Ollama
 
@@ -1128,69 +1105,6 @@ public class ProxyServer : IDisposable
             context.Response.StatusCode = 502;
             var error = Encoding.UTF8.GetBytes($"{{\"error\":\"{ex.Message}\"}}");
             await context.Response.OutputStream.WriteAsync(error);
-        }
-    }
-
-    // Web Interface Settings Endpoints
-
-    private async Task HandleWebSettingsReadAsync(HttpListenerContext context)
-    {
-        try
-        {
-            if (context.Request.HttpMethod != "GET")
-            {
-                await RespondJsonAsync(context, 405, ApiResponse.ErrorResponse("Method not allowed. Use GET."));
-                return;
-            }
-
-            using var scope = _scopeFactory.CreateScope();
-            var settingsService = scope.ServiceProvider.GetRequiredService<ISettingsService>();
-            var settings = settingsService.LoadForWebInterface();
-
-            await RespondJsonAsync(context, 200,
-                ApiResponse.OkWithData(JsonSerializer.SerializeToElement(settings, AppJsonContext.Default.Settings)));
-        }
-        catch (Exception ex)
-        {
-            await RespondJsonAsync(context, 500, ApiResponse.ErrorResponse(ex.Message));
-        }
-    }
-
-    private async Task HandleWebSettingsSaveAsync(HttpListenerContext context)
-    {
-        try
-        {
-            if (context.Request.HttpMethod != "PUT")
-            {
-                await RespondJsonAsync(context, 405, ApiResponse.ErrorResponse("Method not allowed. Use PUT."));
-                return;
-            }
-
-            using var reader = new StreamReader(context.Request.InputStream, Encoding.UTF8);
-            var body = await reader.ReadToEndAsync();
-
-            var settings = JsonSerializer.Deserialize<Settings>(body, AppJsonContext.Default.Settings);
-            if (settings is null)
-            {
-                await RespondJsonAsync(context, 400, ApiResponse.ErrorResponse("Invalid JSON body."));
-                return;
-            }
-
-            using var scope = _scopeFactory.CreateScope();
-            var settingsService = scope.ServiceProvider.GetRequiredService<ISettingsService>();
-            settingsService.Save(settings);
-
-            await RespondJsonAsync(
-                context,
-                200,
-                ApiResponse.OkWithData(JsonSerializer.SerializeToElement(
-                    new ApiResponse { },
-                    AppJsonContext.Default.ApiResponse)
-                ));
-        }
-        catch (Exception ex)
-        {
-            await RespondJsonAsync(context, 500, ApiResponse.ErrorResponse(ex.Message));
         }
     }
 
