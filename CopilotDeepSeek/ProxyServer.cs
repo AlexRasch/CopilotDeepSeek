@@ -156,60 +156,33 @@ public class ProxyServer : IDisposable
             var route = _routes.FirstOrDefault(r => r.Method == method && r.Path == path);
             if (route is not null)
             {
-                await route.Handler(context, _requestContext);
+                if (AllowDeepSeek)
+                    await route.Handler(context, _requestContext);
+                else
+                    await _requestContext.DeepSeekDeniedResponseAsync(context);
                 CompleteRequest(sw, context, context.Response.StatusCode, context.Response.StatusCode < 400);
                 return;
+            }
+
+            // Serve static files from www/ for GET requests with known extensions
+            if (context.Request.HttpMethod == "GET")
+            {
+                var ext = Path.GetExtension(context.Request.Url!.AbsolutePath);
+                if (MimeTypes.StaticMimeTypes.ContainsKey(ext))
+                {
+                    await HandleStaticFileAsync(context, sw);
+                    return;
+                }
             }
 
             // Route specialized endpoints directly
             switch (context.Request.Url!.AbsolutePath)
             {
-                // OLLAMA
-
                 case "/api/chat":
                     await HandleOllamaChatAsync(context);
                     CompleteRequest(sw, context, 200, true);
                     return;
-                // Portal & Ollama health check
-                case "/":
-                    if (context.Request.Headers["Accept"]?.Contains("application/json") == true)
-                    {
-                        var healthBytes = """{"status":"ollama is running"}"""u8;
-                        context.Response.StatusCode = 200;
-                        context.Response.ContentType = "application/json; charset=utf-8";
-                        context.Response.ContentLength64 = healthBytes.Length;
-                        byte[] messageBytes = healthBytes.ToArray();
-                        await context.Response.OutputStream.WriteAsync(messageBytes, 0, messageBytes.Length);
-                        return;
-                    }
-                    await HandleIndexAsync(context, sw);
-                    CompleteRequest(sw, context, 200, true);
-                    return;
-
-                default:
-                    // Serve static files from www/ for GET requests with known extensions
-                    if (context.Request.HttpMethod == "GET")
-                    {
-                        var ext = Path.GetExtension(context.Request.Url!.AbsolutePath);
-                        if (MimeTypes.StaticMimeTypes.ContainsKey(ext))
-                        {
-                            await HandleStaticFileAsync(context, sw);
-                            return;
-                        }
-                    }
-                    break;
             }
-
-            // If user have decided to deny deep seek requests, block any non-static requests to the proxy
-            if (!AllowDeepSeek)
-            {
-                //context.Response.StatusCode = 403;
-                await RespondJsonAsync(context, 403, ApiResponse.ErrorResponse("Proxy requests to DeepSeek are disabled"));
-                CompleteRequest(sw, context, 403, false);
-                //context.Response.Close();
-                return;
-            }
-
 
             // General proxy logic for all other endpoints
             var targetUrl = $"{_targetBase}{context.Request.Url!.AbsolutePath}{context.Request.Url.Query}";
@@ -522,39 +495,6 @@ public class ProxyServer : IDisposable
         }
     }
 
-    private async Task HandleIndexAsync(HttpListenerContext context, Stopwatch sw)
-    {
-        try
-        {
-            var path = Path.Combine(AppContext.BaseDirectory, "www", "index.html");
-
-            if (!File.Exists(path))
-            {
-                context.Response.StatusCode = 404;
-                CompleteRequest(sw, context, 404, false);
-                return;
-            }
-
-            var bytes = await File.ReadAllBytesAsync(path);
-            context.Response.StatusCode = 200;
-            context.Response.ContentType = "text/html; charset=utf-8";
-            context.Response.ContentLength64 = bytes.Length;
-            await context.Response.OutputStream.WriteAsync(bytes);
-            CompleteRequest(sw, context, 200, true);
-        }
-        catch (Exception ex)
-        {
-            context.Response.StatusCode = 500;
-            var error = Encoding.UTF8.GetBytes($"{{\"error\":\"{ex.Message}\"}}");
-            await context.Response.OutputStream.WriteAsync(error);
-            CompleteRequest(sw, context, 500, false);
-        }
-        finally
-        {
-            context.Response.Close();
-        }
-    }
-
     private async Task HandleStaticFileAsync(HttpListenerContext context, Stopwatch sw)
     {
         try
@@ -591,16 +531,6 @@ public class ProxyServer : IDisposable
         {
             context.Response.Close();
         }
-    }
-
-    private static async Task RespondJsonAsync(HttpListenerContext context, int statusCode, ApiResponse response)
-    {
-        var json = JsonSerializer.Serialize(response, AppJsonContext.Default.ApiResponse);
-        var bytes = Encoding.UTF8.GetBytes(json);
-        context.Response.StatusCode = statusCode;
-        context.Response.ContentType = "application/json; charset=utf-8";
-        context.Response.ContentLength64 = bytes.Length;
-        await context.Response.OutputStream.WriteAsync(bytes);
     }
 
     /// <summary>

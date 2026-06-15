@@ -8,6 +8,20 @@ namespace CopilotDeepSeek.Routes
 {
     public static class OllamaRoutes
     {
+        //Ollama health check
+        public static async Task HandleOllamaHealthCheck(HttpListenerContext context, RequestContext ctx)
+        {
+            try
+            {
+                var healthBytes = """{"status":"ollama is running"}"""u8;
+                context.Response.StatusCode = 200;
+                context.Response.ContentType = "application/json; charset=utf-8";
+                context.Response.ContentLength64 = healthBytes.Length;
+                byte[] messageBytes = healthBytes.ToArray();
+                await context.Response.OutputStream.WriteAsync(messageBytes, 0, messageBytes.Length);
+            }
+            catch { }
+        }
 
         public static async Task HandleOllamaTagsAsync(HttpListenerContext context, RequestContext ctx)
         {

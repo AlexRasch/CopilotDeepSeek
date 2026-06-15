@@ -10,6 +10,36 @@ namespace CopilotDeepSeek.Routes
 {
     public static class WebRoutes
     {
+        public static async Task HandleIndexRequest(HttpListenerContext context, RequestContext ctx)
+        {
+            try
+            {
+                var path = Path.Combine(AppContext.BaseDirectory, "www", "index.html");
+
+                if (!File.Exists(path))
+                {
+                    context.Response.StatusCode = 404;
+                    return;
+                }
+
+                var bytes = await File.ReadAllBytesAsync(path);
+                context.Response.StatusCode = 200;
+                context.Response.ContentType = "text/html; charset=utf-8";
+                context.Response.ContentLength64 = bytes.Length;
+                await context.Response.OutputStream.WriteAsync(bytes);
+            }
+            catch (Exception ex)
+            {
+                context.Response.StatusCode = 500;
+                var error = Encoding.UTF8.GetBytes($"{{\"error\":\"{ex.Message}\"}}");
+                await context.Response.OutputStream.WriteAsync(error);
+            }
+            finally
+            {
+                context.Response.Close();
+            }
+        }
+
         public static async Task HandleWebSettingsReadAsync(HttpListenerContext context, RequestContext ctx)
         {
             try

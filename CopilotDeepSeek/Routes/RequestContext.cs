@@ -16,14 +16,14 @@ public delegate Task RouteHandler(HttpListenerContext context, RequestContext ct
 /// </summary>
 public sealed class RequestContext
 {
-    // -- Injected services --
+    // Injected services
     public IServiceScopeFactory ScopeFactory { get; }
     public HttpClient HttpClient { get; }
     public string TargetBase { get; }
     public string ApiKey { get; }
     public SocketsHttpHandler SocketHandler { get; }
 
-    // -- Shared mutable state --
+    // Shared mutable state
     public ConcurrentDictionary<string, string> ReasoningCache { get; }
     public long AssistantMsgCounter { get; set; }
     public bool AllowDeepSeek { get; set; } = true;
@@ -77,6 +77,10 @@ public sealed class RequestContext
         }
     }
 
+    public async Task DeepSeekDeniedResponseAsync(HttpListenerContext context)
+    {
+        await RespondJsonAsync(context, 403, ApiResponse.ErrorResponse("Proxy requests to DeepSeek are disabled"));
+    }
 
     [Conditional("DEBUG")]
     public static void DumpJson(string label, string json, int maxLength = 10000)
