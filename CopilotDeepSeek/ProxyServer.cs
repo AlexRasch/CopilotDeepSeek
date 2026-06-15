@@ -191,13 +191,6 @@ public class ProxyServer : IDisposable
                     await HandleOllamaChatAsync(context);
                     CompleteRequest(sw, context, 200, true);
                     return;
-
-                // Extra DeepSeek API endpoints
-                case "/user/balance":
-                case "/models":
-                    await HandleSimpleGetAsync(context, sw, context.Request.Url.AbsolutePath);
-                    CompleteRequest(sw, context, 200, true);
-                    return;
                 // Portal & Ollama health check
                 case "/":
                     if (context.Request.Headers["Accept"]?.Contains("application/json") == true)
@@ -622,35 +615,6 @@ public class ProxyServer : IDisposable
             var error = Encoding.UTF8.GetBytes($"{{\"error\":\"{ex.Message}\"}}");
             await context.Response.OutputStream.WriteAsync(error);
             CompleteRequest(sw, context, 500, false);
-        }
-        finally
-        {
-            context.Response.Close();
-        }
-    }
-
-    private async Task HandleSimpleGetAsync(HttpListenerContext context, Stopwatch sw, string path)
-    {
-        try
-        {
-            using var response = await _httpClient.GetAsync($"{_targetBase}{path}");
-
-            var bytes = await response.Content.ReadAsByteArrayAsync();
-
-            context.Response.StatusCode = (int)response.StatusCode;
-            context.Response.StatusDescription = response.ReasonPhrase ?? string.Empty;
-            context.Response.ContentType = "application/json";
-            context.Response.ContentLength64 = bytes.Length;
-
-            await context.Response.OutputStream.WriteAsync(bytes);
-            CompleteRequest(sw, context, (int)response.StatusCode, response.IsSuccessStatusCode);
-        }
-        catch (Exception ex)
-        {
-            context.Response.StatusCode = 502;
-            var error = Encoding.UTF8.GetBytes($"{{\"error\":\"{ex.Message}\"}}");
-            await context.Response.OutputStream.WriteAsync(error);
-            CompleteRequest(sw, context, 502, false);
         }
         finally
         {

@@ -54,6 +54,30 @@ public sealed class RequestContext
         await context.Response.OutputStream.WriteAsync(bytes);
     }
 
+    public async Task HandleSimpleGetAsync(HttpListenerContext context, string url)
+    {
+        try
+        {
+            using var response = await HttpClient.GetAsync(url);
+
+            var bytes = await response.Content.ReadAsByteArrayAsync();
+
+            context.Response.StatusCode = (int)response.StatusCode;
+            context.Response.StatusDescription = response.ReasonPhrase ?? string.Empty;
+            context.Response.ContentType = "application/json";
+            context.Response.ContentLength64 = bytes.Length;
+
+            await context.Response.OutputStream.WriteAsync(bytes);
+        }
+        catch (Exception ex)
+        {
+            context.Response.StatusCode = 502;
+            var error = Encoding.UTF8.GetBytes($"{{\"error\":\"{ex.Message}\"}}");
+            await context.Response.OutputStream.WriteAsync(error);
+        }
+    }
+
+
     [Conditional("DEBUG")]
     public static void DumpJson(string label, string json, int maxLength = 10000)
     {

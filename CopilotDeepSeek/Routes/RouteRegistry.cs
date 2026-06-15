@@ -20,6 +20,8 @@ public static class RouteRegistry
 
 
         // Web Portal – internal API
+        yield return new Route(ProxyRequestMethod.GET, "/web-api/models", DeepSeekRoutes.HandleDeepSeekModelsAsync);
+        yield return new Route(ProxyRequestMethod.GET, "/web-api/balance", DeepSeekRoutes.HandleDeepSeekBalanceAsync);
         yield return new Route(ProxyRequestMethod.GET, "/web-api/start", ProxyRoutes.HandleStart);
         yield return new Route(ProxyRequestMethod.GET, "/web-api/stop", ProxyRoutes.HandleStop);
         yield return new Route(ProxyRequestMethod.GET, "/web-api/settings", WebRoutes.HandleWebSettingsReadAsync);
