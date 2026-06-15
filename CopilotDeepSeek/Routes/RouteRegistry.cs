@@ -10,16 +10,17 @@ public static class RouteRegistry
 {
     public static IEnumerable<Route> GetAll()
     {
-        // Ollama-compatible endpoints
-        //yield return new Route("POST", "/api/chat", OllamaRoutes.HandleChat);
+        // Ollama compatible endpoints
         yield return new Route(ProxyRequestMethod.GET, "/", OllamaRoutes.HandleOllamaHealthCheck);
+        yield return new Route(ProxyRequestMethod.POST, "/api/chat", OllamaRoutes.HandleChatAsync);
         yield return new Route(ProxyRequestMethod.GET, "/api/tags", OllamaRoutes.HandleOllamaTagsAsync);
-        
+
 
         // LM Studio
         // TODO
 
         // OpenAI compatible endpoints
+        yield return new Route(ProxyRequestMethod.POST, "/v1/chat/completions", OpenAiRoutes.HandleChatCompletionsAsync);
 
 
         // Web Portal
