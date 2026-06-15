@@ -11,7 +11,7 @@ public static class RouteRegistry
     public static IEnumerable<Route> GetAll()
     {
         // Ollama-compatible endpoints
-        //yield return new Route("GET", "/api/tags", OllamaRoutes.HandleTags);
+        yield return new Route(ProxyRequestMethod.GET, "/api/tags", OllamaRoutes.HandleOllamaTagsAsync);
         //yield return new Route("POST", "/api/chat", OllamaRoutes.HandleChat);
 
         // LM Studio 

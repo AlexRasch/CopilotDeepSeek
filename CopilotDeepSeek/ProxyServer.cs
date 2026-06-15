@@ -130,23 +130,6 @@ public class ProxyServer : IDisposable
         IsRunning = false;
     }
 
-
-    /// <summary>
-    /// Used by webinterface to allow deep seek requests to be proxied through
-    /// </summary>
-    public void AllowDeepSeekRequests()
-    {
-        this.AllowDeepSeek = true;
-    }
-
-    /// <summary>
-    /// Used by webinterface to deny deep seek requests from being proxied through
-    /// </summary>
-    public void DenyDeepSeekRequests()
-    {
-        this.AllowDeepSeek = false;
-    }
-
     private async Task RunLoopAsync(CancellationToken token)
     {
         while (!token.IsCancellationRequested)
@@ -182,10 +165,6 @@ public class ProxyServer : IDisposable
             switch (context.Request.Url!.AbsolutePath)
             {
                 // OLLAMA
-                case "/api/tags":
-                    await HandleOllamaTagsAsync(context);
-                    CompleteRequest(sw, context, 200, true);
-                    return;
 
                 case "/api/chat":
                     await HandleOllamaChatAsync(context);
@@ -543,14 +522,6 @@ public class ProxyServer : IDisposable
         }
     }
 
-    public void Dispose()
-    {
-        _cts.Cancel();
-        _cts.Dispose();
-        _handler.Dispose();
-        (_listener as IDisposable)?.Dispose();
-    }
-
     private async Task HandleIndexAsync(HttpListenerContext context, Stopwatch sw)
     {
         try
@@ -630,88 +601,6 @@ public class ProxyServer : IDisposable
         context.Response.ContentType = "application/json; charset=utf-8";
         context.Response.ContentLength64 = bytes.Length;
         await context.Response.OutputStream.WriteAsync(bytes);
-    }
-
-    // Ollama
-
-    /// <summary>
-    /// Fetches the real model list from DeepSeek's /models endpoint and
-    /// transforms it into an Ollama-compatible /api/tags response.
-    /// </summary>
-    private async Task HandleOllamaTagsAsync(HttpListenerContext context)
-    {
-        try
-        {
-            using var response = await _httpClient.GetAsync($"{_targetBase}/models");
-
-            if (!response.IsSuccessStatusCode)
-            {
-
-                return;
-            }
-
-            var json = await response.Content.ReadAsStringAsync();
-            using var doc = JsonDocument.Parse(json);
-            var root = doc.RootElement;
-
-            using var ms = new MemoryStream();
-            using var writer = new Utf8JsonWriter(ms);
-
-            writer.WriteStartObject();
-            writer.WritePropertyName("models");
-            writer.WriteStartArray();
-
-            if (root.TryGetProperty("data", out var data) && data.ValueKind == JsonValueKind.Array)
-            {
-                foreach (var model in data.EnumerateArray())
-                {
-                    var id = model.TryGetProperty("id", out var idProp) ? idProp.GetString() : null;
-                    if (string.IsNullOrEmpty(id)) continue;
-
-                    var modelTag = $"{id}";
-                    var digest = Convert.ToHexString(
-                        System.Security.Cryptography.SHA256.HashData(
-                            Encoding.UTF8.GetBytes(id)))
-                        .ToLowerInvariant();
-
-                    writer.WriteStartObject();
-                    writer.WriteString("name", modelTag);
-                    writer.WriteString("model", modelTag);
-                    writer.WriteString("modified_at", "2024-01-01T00:00:00Z");
-                    writer.WriteNumber("size", 3821945920L);
-                    writer.WriteString("digest", $"sha256:{digest}");
-
-                    writer.WriteStartObject("details");
-                    writer.WriteString("parent_model", "");
-                    writer.WriteString("format", "gguf");
-                    writer.WriteString("family", id.Split('-')[0]);
-                    writer.WriteStartArray("families");
-                    writer.WriteStringValue("deepseek");
-                    writer.WriteEndArray();
-                    writer.WriteString("parameter_size", "7B");
-                    writer.WriteString("quantization_level", "Q4_K_M");
-                    writer.WriteEndObject();
-
-                    writer.WriteEndObject();
-                }
-            }
-
-            writer.WriteEndArray();
-            writer.WriteEndObject();
-            writer.Flush();
-
-            var bytes = ms.ToArray();
-            context.Response.StatusCode = 200;
-            context.Response.ContentType = "application/json; charset=utf-8";
-            context.Response.ContentLength64 = bytes.Length;
-            await context.Response.OutputStream.WriteAsync(bytes);
-        }
-        catch (Exception ex)
-        {
-            context.Response.StatusCode = 502;
-            var error = Encoding.UTF8.GetBytes($"{{\"error\":\"{ex.Message}\"}}");
-            await context.Response.OutputStream.WriteAsync(error);
-        }
     }
 
     /// <summary>
@@ -894,6 +783,14 @@ public class ProxyServer : IDisposable
             var error = Encoding.UTF8.GetBytes($"{{\"error\":\"{ex.Message}\"}}");
             await context.Response.OutputStream.WriteAsync(error);
         }
+    }
+
+    public void Dispose()
+    {
+        _cts.Cancel();
+        _cts.Dispose();
+        _handler.Dispose();
+        (_listener as IDisposable)?.Dispose();
     }
 
     [Conditional("DEBUG")]
