@@ -4,6 +4,8 @@ using System.Net;
 using System.Text;
 using System.Text.Json;
 
+using CopilotDeepSeek.Constants;
+
 namespace CopilotDeepSeek.Routes
 {
     public static class OllamaRoutes
@@ -120,22 +122,13 @@ namespace CopilotDeepSeek.Routes
                 var stream = root.TryGetProperty("stream", out var s) && s.GetBoolean();
 
                 // Forward to DeepSeek /chat/completions
-                using var client = new HttpClient(ctx.SocketHandler, disposeHandler: false);
-                using var forwardRequest = new HttpRequestMessage(HttpMethod.Post, $"{ctx.TargetBase}/chat/completions")
-                {
-                    Content = new StringContent(body, Encoding.UTF8, "application/json")
-                };
-
-                ctx.SetBearerTokenAuthHeader(forwardRequest);
-
-                var completionOption = stream
-                    ? HttpCompletionOption.ResponseHeadersRead
-                    : HttpCompletionOption.ResponseContentRead;
-
-                using var forwardResponse = await client.SendAsync(forwardRequest, completionOption);
+                using var forwardResponse = await ctx.SendForwardRequestAsync(
+                    ctx.GetEndpointUrl(ApiEndpoints.ChatCompletions),
+                    body,
+                    stream);
 
                 context.Response.StatusCode = (int)forwardResponse.StatusCode;
-                context.Response.ContentType = "application/json";
+                context.Response.ContentType = ContentTypes.ApplicationJson;
 
                 if (stream && forwardResponse.IsSuccessStatusCode)
                 {

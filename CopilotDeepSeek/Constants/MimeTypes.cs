@@ -12,7 +12,7 @@ namespace CopilotDeepSeek.Constants
             { ".html", "text/html; charset=utf-8" },
             { ".css",  "text/css" },
             { ".js",   "application/javascript" },
-            { ".json", "application/json" },
+            { ".json", ContentTypes.ApplicationJson },
             { ".png",  "image/png" },
             { ".jpg",  "image/jpeg" },
             { ".jpeg", "image/jpeg" },
@@ -22,7 +22,7 @@ namespace CopilotDeepSeek.Constants
             { ".woff", "font/woff" },
             { ".woff2","font/woff2" },
             { ".ttf",  "font/ttf" },
-            { ".map",  "application/json" },
+            { ".map",  ContentTypes.ApplicationJson },
         };
 
     }

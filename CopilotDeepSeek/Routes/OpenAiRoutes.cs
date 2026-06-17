@@ -1,4 +1,5 @@
-﻿using System.Net;
+﻿using CopilotDeepSeek.Constants;
+using System.Net;
 using System.Text;
 using System.Text.Json;
 
@@ -26,19 +27,10 @@ public static class OpenAiRoutes
             var requestBody = ctx.ModifyRequestBody(body, out var isStreaming);
 
             // Forward to DeepSeek /chat/completions
-            using var client = new HttpClient(ctx.SocketHandler, disposeHandler: false);
-            using var forwardRequest = new HttpRequestMessage(HttpMethod.Post, $"{ctx.TargetBase}/chat/completions")
-            {
-                Content = new StringContent(requestBody, Encoding.UTF8, "application/json")
-            };
-
-            ctx.SetBearerTokenAuthHeader(forwardRequest);
-
-            var completionOption = isStreaming
-                ? HttpCompletionOption.ResponseHeadersRead
-                : HttpCompletionOption.ResponseContentRead;
-
-            using var forwardResponse = await client.SendAsync(forwardRequest, completionOption);
+            using var forwardResponse = await ctx.SendForwardRequestAsync(
+                ctx.GetEndpointUrl(ApiEndpoints.ChatCompletions),
+                requestBody,
+                isStreaming);
 
             // Copy response status and headers
             context.Response.StatusCode = (int)forwardResponse.StatusCode;

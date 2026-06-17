@@ -1,4 +1,5 @@
-﻿using CopilotDeepSeek.Models;
+﻿using CopilotDeepSeek.Constants;
+using CopilotDeepSeek.Models;
 using Microsoft.Extensions.DependencyInjection;
 using System.Collections.Concurrent;
 using System.Diagnostics;
@@ -49,7 +50,7 @@ public sealed class RequestContext
         var json = JsonSerializer.Serialize(response, AppJsonContext.Default.ApiResponse);
         var bytes = Encoding.UTF8.GetBytes(json);
         context.Response.StatusCode = statusCode;
-        context.Response.ContentType = "application/json; charset=utf-8";
+        context.Response.ContentType = ContentTypes.ApplicationJsonWithCharset;
         context.Response.ContentLength64 = bytes.Length;
         await context.Response.OutputStream.WriteAsync(bytes);
     }
@@ -64,7 +65,7 @@ public sealed class RequestContext
 
             context.Response.StatusCode = (int)response.StatusCode;
             context.Response.StatusDescription = response.ReasonPhrase ?? string.Empty;
-            context.Response.ContentType = "application/json";
+            context.Response.ContentType = ContentTypes.ApplicationJson;
             context.Response.ContentLength64 = bytes.Length;
 
             await context.Response.OutputStream.WriteAsync(bytes);
@@ -315,6 +316,32 @@ public sealed class RequestContext
     public void SetBearerTokenAuthHeader(HttpRequestMessage request)
     {
         request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", ApiKey);
+    }
+
+    /// <summary>
+    /// Resolves a relative endpoint URI against <see cref="TargetBase"/>.
+    /// Handles base paths (e.g., /v1) correctly regardless of trailing/leading slashes.
+    /// </summary>
+    public Uri GetEndpointUrl(string relativeEndpoint)
+    {
+        var baseUri = TargetBase.EndsWith('/') ? TargetBase : TargetBase + "/";
+        return new Uri(new Uri(baseUri, UriKind.Absolute), relativeEndpoint);
+    }
+
+    public async Task<HttpResponseMessage> SendForwardRequestAsync(Uri url, string body, bool isStreaming)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Post, url)
+        {
+            Content = new StringContent(body, Encoding.UTF8, ContentTypes.ApplicationJson)
+        };
+
+        SetBearerTokenAuthHeader(request);
+
+        var completionOption = isStreaming
+            ? HttpCompletionOption.ResponseHeadersRead
+            : HttpCompletionOption.ResponseContentRead;
+
+        return await HttpClient.SendAsync(request, completionOption);
     }
 
     // Debugging methods

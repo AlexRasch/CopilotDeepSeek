@@ -87,7 +87,7 @@ public class ProxyServer : IDisposable
         _httpClient.DefaultRequestHeaders.Authorization =
             new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", _apiKey);
         _httpClient.DefaultRequestHeaders.Accept.Add(
-            new System.Net.Http.Headers.MediaTypeWithQualityHeaderValue("application/json"));
+            new System.Net.Http.Headers.MediaTypeWithQualityHeaderValue(ContentTypes.ApplicationJson));
 
         _requestContext = new RequestContext(_scopeFactory, _httpClient, _targetBase, _apiKey, _handler, _reasoningCache);
         _routes.AddRange(RouteRegistry.GetAll());
@@ -465,7 +465,7 @@ public class ProxyServer : IDisposable
             using var client = new HttpClient(_handler, disposeHandler: false);
             using var forwardRequest = new HttpRequestMessage(HttpMethod.Post, $"{_targetBase}/chat/completions")
             {
-                Content = new StringContent(body, Encoding.UTF8, "application/json")
+                Content = new StringContent(body, Encoding.UTF8, ContentTypes.ApplicationJson)
             };
             forwardRequest.Headers.Authorization =
                 new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", _apiKey);
@@ -477,7 +477,7 @@ public class ProxyServer : IDisposable
             using var forwardResponse = await client.SendAsync(forwardRequest, completionOption);
 
             context.Response.StatusCode = (int)forwardResponse.StatusCode;
-            context.Response.ContentType = "application/json";
+            context.Response.ContentType = ContentTypes.ApplicationJson;
 
             if (stream && forwardResponse.IsSuccessStatusCode)
             {
