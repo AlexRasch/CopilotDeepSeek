@@ -6,19 +6,17 @@ namespace CopilotDeepSeek.Utils;
 
 internal static class ReasoningEffortInjector
 {
+    /// <summary>
+    /// DeepSeek thinking defaults to enabled, and reasoning_effort default value is 'high'
+    /// This function injects reasoning_effort:'max' if reasoning_effort is not present
+    /// </summary>
+    /// <param name="body"></param>
+    /// <returns></returns>
     internal static string Inject(string body)
     {
         try
         {
             using var doc = JsonDocument.Parse(body);
-            if (!doc.RootElement.TryGetProperty("model", out var modelEl) ||
-                modelEl.ValueKind != JsonValueKind.String)
-                return body;
-
-            var modelStr = modelEl.GetString();
-            if (string.IsNullOrEmpty(modelStr) ||
-                !modelStr.EndsWith(":max", StringComparison.Ordinal))
-                return body;
 
             var bufferWriter = new ArrayBufferWriter<byte>();
             using var w = new Utf8JsonWriter(bufferWriter);
@@ -27,14 +25,7 @@ internal static class ReasoningEffortInjector
 
             foreach (var prop in doc.RootElement.EnumerateObject())
             {
-                if (prop.NameEquals("model"))
-                {
-                    w.WriteString("model",modelStr[..^4]);
-                }
-                else
-                {
                     prop.WriteTo(w);
-                }
             }
 
             // Only add reasoning_effort if not already present

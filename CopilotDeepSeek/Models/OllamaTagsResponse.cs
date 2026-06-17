@@ -24,10 +24,4 @@ public sealed record OllamaModelEntry
     [JsonPropertyName("digest")]
     public required string Digest { get; init; }
 
-    [JsonPropertyName("context_length")]
-    public int ContextLength { get; set; } = 1_000_000;
-
-    [JsonPropertyName("supports_tools")]
-    public bool SupportsTools { get; set; } = true;
-
 }

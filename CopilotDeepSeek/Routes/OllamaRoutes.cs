@@ -28,6 +28,22 @@ namespace CopilotDeepSeek.Routes
         {
             try
             {
+                // When the User-Agent is empty (e.g., Visual Studio), return an empty model list
+                // to avoid no tool support assumptions and low context windows. D: 
+                var userAgent = context.Request.Headers["User-Agent"];
+                if (string.IsNullOrEmpty(userAgent))
+                {
+                    var emptyBytes = JsonSerializer.SerializeToUtf8Bytes(
+                        new OllamaTagsResponse { Models = [] },
+                        AppJsonContext.Default.OllamaTagsResponse);
+                    context.Response.StatusCode = 200;
+                    context.Response.ContentType = "application/json; charset=utf-8";
+                    context.Response.ContentLength64 = emptyBytes.Length;
+                    await context.Response.OutputStream.WriteAsync(emptyBytes);
+                    return;
+                }
+
+
                 using var upstreamResponse = await ctx.GetAsync(
                             ctx.GetEndpointUrl(Constants.ApiEndpoints.Models),
                             useBearerToken: true);
@@ -260,19 +276,6 @@ namespace CopilotDeepSeek.Routes
                         Model = id,
                         Digest = $"sha256:{digest}",
 
-                    });
-
-                    // :max variant
-                    var maxDigest = Convert.ToHexString(
-                            System.Security.Cryptography.SHA256.HashData(
-                                Encoding.UTF8.GetBytes($"{id}:max")))
-                        .ToLowerInvariant();
-
-                    models.Add(new OllamaModelEntry
-                    {
-                        Name = $"{id}:max",
-                        Model = $"{id}:max",
-                        Digest = $"sha256:{maxDigest}",
                     });
                 }
             }
