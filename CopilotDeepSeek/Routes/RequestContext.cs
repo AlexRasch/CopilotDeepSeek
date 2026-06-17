@@ -55,6 +55,16 @@ public sealed class RequestContext
         await context.Response.OutputStream.WriteAsync(bytes);
     }
 
+    public async Task<HttpResponseMessage> GetAsync(Uri uri, bool useBearerToken = false)
+    {
+        using HttpRequestMessage request = new HttpRequestMessage(HttpMethod.Get, uri);
+
+        if (useBearerToken)
+            SetBearerTokenAuthHeader(request);
+
+        return await this.HttpClient.SendAsync(request);
+    }
+
     public async Task HandleSimpleGetAsync(HttpListenerContext context, Uri url, bool useBearerToken = false)
     {
         try

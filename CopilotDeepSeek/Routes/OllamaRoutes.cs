@@ -1,10 +1,9 @@
-﻿using System;
-using System.Collections.Generic;
+﻿using CopilotDeepSeek.Constants;
+using CopilotDeepSeek.Models;
+using CopilotDeepSeek.Utils;
 using System.Net;
 using System.Text;
 using System.Text.Json;
-
-using CopilotDeepSeek.Constants;
 
 namespace CopilotDeepSeek.Routes
 {
@@ -29,64 +28,23 @@ namespace CopilotDeepSeek.Routes
         {
             try
             {
-                using var response = await ctx.HttpClient.GetAsync($"{ctx.TargetBase}/models");
+                using var upstreamResponse = await ctx.GetAsync(
+                            ctx.GetEndpointUrl(Constants.ApiEndpoints.Models),
+                            useBearerToken: true);
 
-                if (!response.IsSuccessStatusCode)
+                if (!upstreamResponse.IsSuccessStatusCode)
                 {
+                    context.Response.StatusCode = (int)upstreamResponse.StatusCode;
                     return;
                 }
 
-                var json = await response.Content.ReadAsStringAsync();
-                using var doc = JsonDocument.Parse(json);
-                var root = doc.RootElement;
+                var json = await upstreamResponse.Content.ReadAsStringAsync();
+                var response = BuildOllamaTagsResponse(json);
 
-                using var ms = new MemoryStream();
-                using var writer = new Utf8JsonWriter(ms);
+                var bytes = JsonSerializer.SerializeToUtf8Bytes(
+                    response,
+                    AppJsonContext.Default.OllamaTagsResponse);
 
-                writer.WriteStartObject();
-                writer.WritePropertyName("models");
-                writer.WriteStartArray();
-
-                if (root.TryGetProperty("data", out var data) && data.ValueKind == JsonValueKind.Array)
-                {
-                    foreach (var model in data.EnumerateArray())
-                    {
-                        var id = model.TryGetProperty("id", out var idProp) ? idProp.GetString() : null;
-                        if (string.IsNullOrEmpty(id)) continue;
-
-                        var modelTag = $"{id}";
-                        var digest = Convert.ToHexString(
-                            System.Security.Cryptography.SHA256.HashData(
-                                Encoding.UTF8.GetBytes(id)))
-                            .ToLowerInvariant();
-
-                        writer.WriteStartObject();
-                        writer.WriteString("name", modelTag);
-                        writer.WriteString("model", modelTag);
-                        writer.WriteString("modified_at", "2024-01-01T00:00:00Z");
-                        writer.WriteNumber("size", 3821945920L);
-                        writer.WriteString("digest", $"sha256:{digest}");
-
-                        writer.WriteStartObject("details");
-                        writer.WriteString("parent_model", "");
-                        writer.WriteString("format", "gguf");
-                        writer.WriteString("family", id.Split('-')[0]);
-                        writer.WriteStartArray("families");
-                        writer.WriteStringValue("deepseek");
-                        writer.WriteEndArray();
-                        writer.WriteString("parameter_size", "7B");
-                        writer.WriteString("quantization_level", "Q4_K_M");
-                        writer.WriteEndObject();
-
-                        writer.WriteEndObject();
-                    }
-                }
-
-                writer.WriteEndArray();
-                writer.WriteEndObject();
-                writer.Flush();
-
-                var bytes = ms.ToArray();
                 context.Response.StatusCode = 200;
                 context.Response.ContentType = "application/json; charset=utf-8";
                 context.Response.ContentLength64 = bytes.Length;
@@ -121,10 +79,13 @@ namespace CopilotDeepSeek.Routes
                 var model = root.TryGetProperty("model", out var m) ? m.GetString() : "";
                 var stream = root.TryGetProperty("stream", out var s) && s.GetBoolean();
 
-                // Forward to DeepSeek /chat/completions
+                // Inject :max → reasoning_effort: max
+                var modifiedBody = ReasoningEffortInjector.Inject(body);
+
+                // Forward the MODIFIED body to DeepSeek
                 using var forwardResponse = await ctx.SendForwardRequestAsync(
                     ctx.GetEndpointUrl(ApiEndpoints.ChatCompletions),
-                    body,
+                    modifiedBody,
                     stream);
 
                 context.Response.StatusCode = (int)forwardResponse.StatusCode;
@@ -269,6 +230,54 @@ namespace CopilotDeepSeek.Routes
                 var error = Encoding.UTF8.GetBytes($"{{\"error\":\"{ex.Message}\"}}");
                 await context.Response.OutputStream.WriteAsync(error);
             }
+        }
+
+
+        // --- Helpers ---
+        private static OllamaTagsResponse BuildOllamaTagsResponse(string json)
+        {
+            using var doc = JsonDocument.Parse(json);
+            var root = doc.RootElement;
+
+            var models = new List<OllamaModelEntry>();
+
+            if (root.TryGetProperty("data", out var data) && data.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var model in data.EnumerateArray())
+                {
+                    var id = model.TryGetProperty("id", out var idProp) ? idProp.GetString() : null;
+                    if (string.IsNullOrEmpty(id)) continue;
+
+                    var digest = Convert.ToHexString(
+                            System.Security.Cryptography.SHA256.HashData(
+                                Encoding.UTF8.GetBytes(id)))
+                        .ToLowerInvariant();
+
+                    // Base model
+                    models.Add(new OllamaModelEntry
+                    {
+                        Name = id,
+                        Model = id,
+                        Digest = $"sha256:{digest}",
+
+                    });
+
+                    // :max variant
+                    var maxDigest = Convert.ToHexString(
+                            System.Security.Cryptography.SHA256.HashData(
+                                Encoding.UTF8.GetBytes($"{id}:max")))
+                        .ToLowerInvariant();
+
+                    models.Add(new OllamaModelEntry
+                    {
+                        Name = $"{id}:max",
+                        Model = $"{id}:max",
+                        Digest = $"sha256:{maxDigest}",
+                    });
+                }
+            }
+
+            return new OllamaTagsResponse { Models = models };
         }
     }
 }

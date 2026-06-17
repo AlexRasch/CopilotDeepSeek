@@ -1,4 +1,5 @@
 ﻿using CopilotDeepSeek.Constants;
+using CopilotDeepSeek.Utils;
 using System.Net;
 using System.Text;
 using System.Text.Json;
@@ -22,6 +23,9 @@ public static class OpenAiRoutes
             using var reader = new StreamReader(context.Request.InputStream, Encoding.UTF8);
             var body = await reader.ReadToEndAsync();
             RequestContext.DumpJson("OPENAI INCOMING", body);
+
+            // Inject :max -> reasoning_effort: max
+            body = ReasoningEffortInjector.Inject(body);
 
             // Inject cached reasoning_content into assistant messages
             var requestBody = ctx.ModifyRequestBody(body, out var isStreaming);

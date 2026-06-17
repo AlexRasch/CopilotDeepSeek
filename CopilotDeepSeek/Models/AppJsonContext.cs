@@ -10,6 +10,7 @@ using System.Text.Json.Serialization;
 [JsonSerializable(typeof(IEnumerable<ProxyRequest>))]
 [JsonSerializable(typeof(ProxyRequestLogsResponse))]
 [JsonSerializable(typeof(Settings))]
+[JsonSerializable(typeof(OllamaTagsResponse))]
 [JsonSourceGenerationOptions(WriteIndented = true, PropertyNameCaseInsensitive = true)]
 internal partial class AppJsonContext : JsonSerializerContext
 {
