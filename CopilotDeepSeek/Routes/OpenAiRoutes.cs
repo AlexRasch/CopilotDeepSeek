@@ -31,8 +31,8 @@ public static class OpenAiRoutes
             {
                 Content = new StringContent(requestBody, Encoding.UTF8, "application/json")
             };
-            forwardRequest.Headers.Authorization =
-                new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", ctx.ApiKey);
+
+            ctx.SetBearerTokenAuthHeader(forwardRequest);
 
             var completionOption = isStreaming
                 ? HttpCompletionOption.ResponseHeadersRead

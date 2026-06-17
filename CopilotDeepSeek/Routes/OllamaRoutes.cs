@@ -125,8 +125,8 @@ namespace CopilotDeepSeek.Routes
                 {
                     Content = new StringContent(body, Encoding.UTF8, "application/json")
                 };
-                forwardRequest.Headers.Authorization =
-                    new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", ctx.ApiKey);
+
+                ctx.SetBearerTokenAuthHeader(forwardRequest);
 
                 var completionOption = stream
                     ? HttpCompletionOption.ResponseHeadersRead

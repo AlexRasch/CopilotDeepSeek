@@ -307,8 +307,17 @@ public sealed class RequestContext
         }
     }
 
+    // Helper 
 
-    // Helper / debugging methods
+    /// <summary>
+    /// Sets the Bearer token authorization header on a forwarded request.
+    /// </summary>
+    public void SetBearerTokenAuthHeader(HttpRequestMessage request)
+    {
+        request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", ApiKey);
+    }
+
+    // Debugging methods
 
     [Conditional("DEBUG")]
     public static void DumpJson(string label, string json, int maxLength = 10000)
