@@ -86,6 +86,7 @@ public class ProxyServer : IDisposable
         _httpClient = new HttpClient(_handler, disposeHandler: false);
         _httpClient.DefaultRequestHeaders.Authorization =
             new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", _apiKey);
+        
         _httpClient.DefaultRequestHeaders.Accept.Add(
             new System.Net.Http.Headers.MediaTypeWithQualityHeaderValue(ContentTypes.ApplicationJson));
 
