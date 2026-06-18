@@ -17,6 +17,7 @@ public static class Helper
         Console.WriteLine($" Version : {GetVersion()}");
         Console.WriteLine($" Proxy   : {(proxyRunning ? "Running" : "Stopped")}");
         Console.WriteLine($" Port    : {(settings != null ? settings.Port.ToString() : "")}");
+        Console.WriteLine($" Portal  : http://localhost:{(settings != null ? settings.Port : "")}/web");
         Console.WriteLine("==============================");
     }
 
